@@ -1,0 +1,40 @@
+--
+--  Fresco Framework for Multi-Language Programming
+--  Copyright 2015-2016 Peter Althainz
+--    
+--  Distributed under the Apache License, Version 2.0
+--  (See attached file LICENSE or copy at 
+--  http:--www.apache.org/licenses/LICENSE-2.0)
+-- 
+--  file: sinopia/fresco-sinopia.cabal
+--
+
+name:                fresco-sinopia
+version:             0.1.0.0
+synopsis:            Tools for fresco
+description:         Fresco is a framwork for multi-language programming. The sinopia tool parses data definition files.
+homepage:            http://github.com/urs-of-the-backwoods/fresco
+license:             OtherLicense
+license-file:        LICENSE
+author:              Urs of the Backwoods
+maintainer:          uotbw@hgamer3d.og
+copyright:           2015-2016 Peter Althainz
+category:            Web
+build-type:          Simple
+-- extra-source-files:
+cabal-version:       >=1.10
+
+executable sinopia
+  hs-source-dirs:      src
+  main-is:             sinopia.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base, parsec
+  default-language:    Haskell2010
+
+--executable test1
+--  hs-source-dirs:      src
+--  main-is:             test1.hs
+--  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+--  build-depends:       base, cereal, messagepack, bytestring, text
+--  default-language:    Haskell2010
+

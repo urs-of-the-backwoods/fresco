@@ -1,0 +1,12 @@
+build-intonaco
+build-tests
+intonaco/target
+intonaco/Cargo.lock
+sinopia/.stack-work
+haskell/.stack-work
+test_hg3d/output
+test_hg3d/cube-rust/target
+test_hg3d/cube-rust/Cargo.lock
+.directory
+.doit.db
+*.pyc
