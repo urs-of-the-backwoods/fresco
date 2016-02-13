@@ -1,14 +1,20 @@
-<?xml version="1.0" ?>
-<?xml-stylesheet type='text/xsl' href='interface.xsl'?>
-<interface uri="http://www.hgamer3d.org/interface/Intonaco" xmlns="http://zero-install.sourceforge.net/2004/injector/interface">
-  <name>Fresco Intonaco</name>
-  <summary>Runtime of Fresco Freamework - Intonaco</summary>
-  <description>
-    The component which glues everything together. A runtime component handling the low-level components.
-  </description>
+# arriccio.toml file for Intonaco (Fresco Runtime)
 
-  <group main="">
-    <implementation id="." version="{version}">
-    </implementation>
-  </group>
-</interface>
+[If]
+  Id = "http://www.hgamer3d.org/interface/Intonaco"
+  Purpose = "Runtime of Fresco Freamework - Intonaco"
+  Description = """
+	The component which glues everything together. 
+	A runtime component handling the low-level components.
+  """
+
+[[Impls]]
+  # 64 bit, linux implementation
+  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-linux-{version}.tar.gz"
+  pgpkey = "https://www.github.com/urs-of-the-backwoods.keys"
+  version = "{version}"
+  architecture = "amd64"
+  os = "linux"
+
+
+

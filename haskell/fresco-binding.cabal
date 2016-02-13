@@ -20,7 +20,7 @@ Author:              Peter Althainz
 Maintainer:          althainz@gmail.com
 Build-Type:          Simple
 Cabal-Version:       >=1.4
-Category:            Development
+Category:            Development, FFI, Interfaces
 Extra-source-files:  Setup.hs 
  
 Library
