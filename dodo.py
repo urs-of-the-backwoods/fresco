@@ -18,14 +18,19 @@ def get_os():
 		return "linux"
 	if os == "Windows":
 		return "windows"
-	return "???"
+	print "don't know, which platform this is: ", os
+	os.exit()
 
 def get_arch():
 	ar = platform.machine()
 	if ar == "x86_64":
 		return "amd64"
+	if ar == "AMD64":
+		return "amd64"
 	if ar == "i386":
 		return "386"
+	print "don't know, which arch this is: ", ar
+	os.exit()
 
 
 version_intonaco = "0.1.0"

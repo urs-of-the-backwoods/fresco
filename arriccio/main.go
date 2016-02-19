@@ -979,7 +979,8 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 			}
 
 			// check for separator
-			s := string(os.PathSeparator)
+			s := string(os.PathListSeparator)
+			println("path sep:", s)
 			if len(fs) == 4 { s = fs[3] }
 
 			// compose result
@@ -1011,11 +1012,14 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	// adapt environment, set binary
 	env := os.Environ()
 	binary := ""
+	arglist := args
 	for _, el := range depi {
 		if el.implem.Command == "" {
 			env = evaluateEnvSetting(env, el.settings, el.installdir)
 		} else {
-			binary = el.implem.Command
+			bparts := strings.Fields(el.implem.Command)
+			binary = bparts[0]
+			arglist = append(bparts[1:], arglist...)
 			env = evaluateEnvSetting(env, el.settings, el.installdir) 
 			// add local path to environment
 			env = evaluateEnvSetting(env, []string{"add-path PATH ."}, el.installdir)
@@ -1023,7 +1027,7 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	}	
 
 	// run command
-	cmd := exec.Command(binary, args...)
+	cmd := exec.Command(binary, arglist...)
 	cmd.Env = env
     cmd.Stdout = os.Stdout
     cmd.Stderr = os.Stderr
