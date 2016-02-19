@@ -955,9 +955,13 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 
 	// create map
 	m := make(map[string]string)
+	orig_key := make(map[string]string)
 	for _, e := range env {
 		kvs := strings.SplitN(e, "=", 2)
-		m[strings.TrimSpace(kvs[0])] = strings.TrimSpace(kvs[1])
+		k := strings.TrimSpace(kvs[0])
+		uk := strings.ToUpper(k)
+		m[uk] = strings.TrimSpace(kvs[1])
+		orig_key[uk] = k
 	}
 
 	// modify map
@@ -980,14 +984,13 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 
 			// check for separator
 			s := string(os.PathListSeparator)
-			println("path sep:", s)
 			if len(fs) == 4 { s = fs[3] }
 
 			// compose result
 			if ok {
-				m[fs[1]] = v + s + val
+				m[strings.ToUpper(fs[1])] = v + s + val
 			} else {
-				m[fs[1]] = val
+				m[strings.ToUpper(fs[1])] = val
 			}
 
 //			println("changed env: ", fs[1])
@@ -1000,7 +1003,11 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 	// create output environment
 	out := []string{}
 	for k, v := range m {
-		out = append(out, k + "=" + v)
+		if val, ok := orig_key[k]; ok {
+			out = append(out, val + "=" + v)
+		} else {
+			out = append(out, k + "=" + v)
+		}
 	}
 	return out
 }
@@ -1013,14 +1020,15 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	env := os.Environ()
 	binary := ""
 	arglist := args
+
 	for _, el := range depi {
-		if el.implem.Command == "" {
-			env = evaluateEnvSetting(env, el.settings, el.installdir)
-		} else {
+		// add environment
+		env = evaluateEnvSetting(env, el.settings, el.installdir)
+		// command handling
+		if len(el.implem.Command) != 0 {
 			bparts := strings.Fields(el.implem.Command)
 			binary = bparts[0]
 			arglist = append(bparts[1:], arglist...)
-			env = evaluateEnvSetting(env, el.settings, el.installdir) 
 			// add local path to environment
 			env = evaluateEnvSetting(env, []string{"add-path PATH ."}, el.installdir)
 		}
