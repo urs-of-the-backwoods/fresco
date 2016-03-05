@@ -128,8 +128,6 @@ dynamicEI :: IORef EntityInterface
 {-# NOINLINE dynamicEI #-}
 dynamicEI = unsafePerformIO ( 
   do
-    print $ "in function dynmicEI Start"
-
     libname <- getEnv "INTONACO_LIB"
     dll <- dlopen libname [RTLD_NOW]
 
@@ -157,7 +155,6 @@ dynamicEI = unsafePerformIO (
     edd <- dlsym dll "entity_data_release"
     let edd' = mkEntityDataReleaseFunction edd
 
-    print $ "in function dynmicEI End"
     ref <- newIORef $ EntityInterface efc' efs' cbc' cbr' cbs' edg' edr' edd'
     return ref
   )

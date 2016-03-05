@@ -215,7 +215,7 @@ pub enum SystemCommands {
     AddEntityToSystem(EntityPointer, Arc<Barrier>),
     RemoveObjectLibItemFromSystem(thread_guard::Value<ObjectLibItemPointer>),
     SetValueOnObjectLibItem(thread_guard::Value<SetValueOnObjectLibItemCallback>, thread_guard::Value<ObjectLibItemPointer>, Arc<Vec<u8>>),
-    SetValueOnEntityComponent(thread_guard::Value<SetValueCallback>, EntityPointer, u64, Arc<Vec<u8>>),
+    SetValueOnEntityComponent(SetValueCallback, EntityPointer, u64, Arc<Vec<u8>>),
 }
 
 //
@@ -333,8 +333,6 @@ fn object_lib_system_loop(lib_name: String, queue: Arc<MsQueue<SystemCommands>>)
         let cmd = queue.pop();
         match cmd {
             SystemCommands::AddEntityToSystem(ep, b) => {
-                println!("{}", "system_loop AddEntityToSystem");
-//                Entity::add_lib(ep, &lib, &queue);
 
                 let EntityPointer(rp) = ep;
                 let e = unsafe { Box::from_raw(rp) };
@@ -437,9 +435,8 @@ impl CallbackSystem {
     pub fn register_callback(&self, ep: EntityPointer, ct: u64, mfp: SetValueCallback) {
         Entity::do_with(ep, |e| {
             let queue2 = self.queue.clone();
-            let ep2 = ep.clone();
             e.values[&ct].add_setter(
-                    Arc::new(move | v | { queue2.push(SystemCommands::SetValueOnEntityComponent(thread_guard::Value::new(mfp), ep, ct, Arc::new(v))); })
+                    Arc::new(move | v | { queue2.push(SystemCommands::SetValueOnEntityComponent(mfp, ep, ct, Arc::new(v))); })
                 );
         });
     }
@@ -454,7 +451,7 @@ impl CallbackSystem {
             SystemCommands::RemoveObjectLibItemFromSystem(ip) => {
             },
             SystemCommands::SetValueOnEntityComponent(cb, ep, ct, av) => {
-                set_value(*cb.borrow_mut(), ep, ct, &av);
+                set_value(cb, ep, ct, &av);
             },
         }
     }

@@ -98,8 +98,6 @@ setDataC :: ComponentClass a => EntityData -> ComponentType a -> a -> EntityData
 setDataC e (ComponentType c) val = M.insert c (toMsg val) e
 
 
--- 2nd level listener
-
 data CallbackSystem = CallbackSystem (Ptr ())
 
 createCBS :: IO CallbackSystem
@@ -111,11 +109,9 @@ stepCBS :: CallbackSystem -> IO ()
 stepCBS (CallbackSystem cbs) = callbackSystemStep cbs
 
 
--- setC :: ComponentClass a => Entity -> ComponentType a -> a -> IO ()
-
 registerReceiverCBS :: ComponentClass a => CallbackSystem -> Entity -> ComponentType a -> (a -> IO ()) -> IO ()
 registerReceiverCBS (CallbackSystem cbs) (Entity _ _ ep) (ComponentType ct) f = do
-  -- MsgFunction: Ptr () -> Ptr CChar -> CInt -> IO CInt
+  -- MsgFunction: Ptr () -> CULong -> Ptr CChar -> CInt -> IO CInt
   let f' = \_ _ cdata len -> do
                                 bs <- packCStringLen (cdata, fromIntegral len)
                                 let c = fromJust(fromMsg bs)
@@ -124,9 +120,6 @@ registerReceiverCBS (CallbackSystem cbs) (Entity _ _ ep) (ComponentType ct) f = 
   mf <- mkMsgFunPtr f'
   callbackSystemRegisterReceiver cbs ep ct mf
   return ()
-
-
-
 
 -- References to Entities
 
@@ -184,10 +177,6 @@ newE inlist = do
      tl <- newIORef (M.fromList [])
      ep <- entityCreate (msgFromE e)
      return $ Entity te tl ep
-
--- | reads the EntityData from an Entity
-readE :: Entity -> IO EntityData
-readE (Entity te _ ep) = readIORef te
 
 -- | reads one ComponentType, throws exception, if ComponentType not present, or wrong type
 readC :: ComponentClass a => Entity -> ComponentType a -> IO a

@@ -34,13 +34,19 @@ def get_arch():
 
 
 version_intonaco = "0.1.0"
+version_haskell_fresco = "0.1.0"
+
+
 arch_os = get_arch() + "-" + get_os()
 
-def copy_file_replace(file_in, replace_in, replace_out, targets):
+def copy_file_replace(file_in, replace_dict, targets):
 	with open(targets[0], "wt") as fout:
 	    with open(file_in, "rt") as fin:
 	        for line in fin:
-	            fout.write(line.replace(replace_in, replace_out))
+	        	line_out = line
+	        	for k in replace_dict.keys():
+	        		line_out = line_out.replace(k, replace_dict[k])
+		        fout.write(line_out)
 
 def task_intonaco():
 
@@ -67,7 +73,7 @@ def task_intonaco():
 	yield {
 		'name' : 'arriccio',
 	    'actions': [
-	    	(copy_file_replace, ['interface/Intonaco', '{version}', version_intonaco]),
+	    	(copy_file_replace, ['interface/Intonaco', {'{version}' : version_intonaco} ]),
 			'aio local http://www.hgamer3d.org/interface/Intonaco build-intonaco || true',
 	    ],
 	    'targets': ['build-intonaco/arriccio.toml'], 
@@ -76,6 +82,40 @@ def task_intonaco():
 			'interface/Intonaco',
 		]
 	} 
+
+def task_haskell():
+
+	yield {
+		'name' : 'cabal',
+	    'actions': [
+	    	(copy_file_replace, ['haskell/fresco-binding.cabal.tmpl', {'{version}' : version_haskell_fresco} ]),
+	    ],
+	    'targets': ['haskell/fresco-binding.cabal'],
+	    'uptodate': [config_changed(version_haskell_fresco)],
+	    'file_dep': [
+			'haskell/fresco-binding.cabal.tmpl',
+		]
+	} 
+
+	yield {
+		'name' : 'library',
+		'actions' : [
+					 'cd haskell && stack build',
+					 'cd haskell && stack sdist',
+					 'mkdir -p build-haskell',
+					 'cd haskell && bash -c "cp `find .stack-work | grep .tar.gz` ../build-haskell"'
+					],
+		'targets' : ['build-haskell/fresco-binding-' + version_haskell_fresco + '.tar.gz'],
+	    'file_dep': [
+			'haskell/Fresco/Component.hs',
+			'haskell/Fresco/Entity.hs',
+			'haskell/Fresco/System.hs',
+			'haskell/fresco-binding.cabal',
+			'haskell/Fresco.hs',
+			'haskell/LICENSE',
+			'haskell/stack.yaml',
+		],
+	}
 
 def task_tests():
 
