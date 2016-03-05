@@ -116,7 +116,7 @@ stepCBS (CallbackSystem cbs) = callbackSystemStep cbs
 registerReceiverCBS :: ComponentClass a => CallbackSystem -> Entity -> ComponentType a -> (a -> IO ()) -> IO ()
 registerReceiverCBS (CallbackSystem cbs) (Entity _ _ ep) (ComponentType ct) f = do
   -- MsgFunction: Ptr () -> Ptr CChar -> CInt -> IO CInt
-  let f' = \_ cdata len -> do
+  let f' = \_ _ cdata len -> do
                                 bs <- packCStringLen (cdata, fromIntegral len)
                                 let c = fromJust(fromMsg bs)
                                 f c
@@ -191,7 +191,11 @@ readE (Entity te _ ep) = readIORef te
 
 -- | reads one ComponentType, throws exception, if ComponentType not present, or wrong type
 readC :: ComponentClass a => Entity -> ComponentType a -> IO a
-readC er c = readE er >>= \e -> return (e #! c)
+readC (Entity te _ ep) (ComponentType ct) = do
+  edat <- entityGetData ep ct
+  bs <- entityDataRead edat
+  entityDataRelease edat
+  return (fromJust (fromMsg bs))
 
 -- | updates one ComponentType
 updateC :: ComponentClass a => Entity -> ComponentType a -> (a -> a) -> IO ()

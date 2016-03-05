@@ -59,11 +59,11 @@ impl<T> Value<T> {
                             o = owned;
                         },
                         // only to satisfy ownership semantics, should never happen
-                        Err(None) => return panic!("ecs-glue runtime: Err(None) in Value::set!"),
+                        Err(None) => return panic!("lockfree_value: Err(None) in Value::set!"),
                     }
 
                 },
-                None => return panic!("ecs-glue runtime: empty pointer in Value::set!"),
+                None => return panic!("lockfree_value: empty pointer in Value::set!"),
             }
         }
     }
@@ -76,7 +76,7 @@ impl<T> Value<T> {
         // snapshot current value
         match self.data_ptr.load(Acquire, &guard) {
                 Some (ptr) => (*ptr).clone(),
-                None => panic!("ecs-glue runtime: empty pointer in Value::snapshot!"),
+                None => panic!("lockfree_value: empty pointer in Value::snapshot!"),
             }
     }
 }

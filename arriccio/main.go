@@ -1027,10 +1027,10 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 		// command handling
 		if len(el.implem.Command) != 0 {
 			bparts := strings.Fields(el.implem.Command)
-			binary = bparts[0]
+			binary = el.installdir + string(os.PathSeparator) + bparts[0]  // append installdir to command
 			arglist = append(bparts[1:], arglist...)
 			// add local path to environment
-			env = evaluateEnvSetting(env, []string{"add-path PATH ."}, el.installdir)
+//			env = evaluateEnvSetting(env, []string{"add-path PATH ."}, el.installdir)
 		}
 	}	
 

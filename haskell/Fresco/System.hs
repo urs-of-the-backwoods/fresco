@@ -45,17 +45,17 @@ fromMsg bs = case decode bs of
 
 -- helper functions
 
-type MsgFunction = Ptr () -> Ptr CChar -> CInt -> IO CInt
+type MsgFunction = Ptr () -> CULong -> Ptr CChar -> CInt -> IO CInt
 foreign import ccall "dynamic" 
    mkMsgFun :: FunPtr MsgFunction -> MsgFunction
 foreign import ccall "wrapper"
    mkMsgFunPtr :: MsgFunction -> IO (FunPtr MsgFunction)
 
-callMsgFunction :: FunPtr MsgFunction -> Ptr () -> ByteString -> IO Int
-callMsgFunction mf p msg = do
+callMsgFunction :: FunPtr MsgFunction -> Ptr () -> CULong -> ByteString -> IO Int
+callMsgFunction mf p ct msg = do
       let f = mkMsgFun mf
       let dat = msg
-      unsafeUseAsCStringLen' dat $ \(dat'1, dat'2) -> f p dat'1  dat'2 >>= \res -> return (fromIntegral res)
+      unsafeUseAsCStringLen' dat $ \(dat'1, dat'2) -> f p ct dat'1  dat'2 >>= \res -> return (fromIntegral res)
 --      unsafeUseAsCStringLen' dat $ \(dat'1, dat'2) -> print "msgfun" >> print dat'1 >> print dat'2 >> f p dat'1  dat'2 >>= \res -> return (fromIntegral res)
 
 type InitFunction = Ptr () -> IO CInt
@@ -70,6 +70,7 @@ callInitFunction ifp p = do
 
 
 
+
 -- Entity Interface
 
 type EntityCreateFunction = ((Ptr CChar) -> (CInt -> ((Ptr (Ptr ())) -> (IO ())))) 
@@ -80,6 +81,22 @@ type EntitySetFunction = ((Ptr CChar) -> (CInt -> ((Ptr ()) -> (IO ()))))
 foreign import ccall "dynamic" 
    mkEntitySetFunction :: FunPtr EntitySetFunction -> EntitySetFunction
 
+-- pub extern "C" fn entity_get_data(ep: EntityPointer, ct: u64, pp: *mut *mut DataPointer) 
+type EntityGetDataFunction = ((Ptr ()) -> CULong -> (Ptr (Ptr ())) -> IO ())
+foreign import ccall "dynamic" 
+   mkEntityGetDataFunction :: FunPtr EntityGetDataFunction -> EntityGetDataFunction
+
+-- pub extern "C" fn entity_data_read(dp: *mut DataPointer, p_cp: *mut *const libc::c_char, p_len: *mut libc::c_int)
+type EntityDataReadFunction = ((Ptr ()) -> (Ptr (Ptr CChar)) -> (Ptr CInt) -> IO ())
+foreign import ccall "dynamic" 
+   mkEntityDataReadFunction :: FunPtr EntityDataReadFunction -> EntityDataReadFunction
+
+-- pub extern "C" fn entity_data_release(dp: *mut DataPointer)
+type EntityDataReleaseFunction = ((Ptr ()) -> IO ())
+foreign import ccall "dynamic" 
+   mkEntityDataReleaseFunction :: FunPtr EntityDataReleaseFunction -> EntityDataReleaseFunction
+
+
 
 -- pub extern "C" fn callback_system_create(pp: *mut *mut CallbackSystem) {
 type CallbackSystemCreateFunction = ((Ptr (Ptr ())) -> (IO ()))
@@ -87,7 +104,7 @@ foreign import ccall "dynamic"
    mkCallbackSystemCreateFunction :: FunPtr CallbackSystemCreateFunction -> CallbackSystemCreateFunction
 
 -- pub extern "C" fn callback_system_register_receiver (cbs: *mut CallbackSystem, ep: EntityPointer, ct: u64, mfp: MessageFunctionPointer) {
-type CallbackSystemRegisterReceiverFunction = ((Ptr ()) -> ((Ptr ()) -> (CULong -> ((FunPtr ((Ptr ()) -> ((Ptr CChar) -> (CInt -> (IO CInt))))) -> (IO ())))))
+type CallbackSystemRegisterReceiverFunction = ((Ptr ()) -> ((Ptr ()) -> (CULong -> ((FunPtr ((Ptr ()) -> (CULong -> ((Ptr CChar) -> (CInt -> (IO CInt))))) -> (IO ()))))))
 foreign import ccall "dynamic"
    mkCallbackSystemRegisterReceiverFunction :: FunPtr CallbackSystemRegisterReceiverFunction -> CallbackSystemRegisterReceiverFunction
 
@@ -101,17 +118,24 @@ data EntityInterface = EntityInterface {
                         efSet :: EntitySetFunction,
                         cbsfCreate :: CallbackSystemCreateFunction,
                         cbsfRegisterReceiver :: CallbackSystemRegisterReceiverFunction,
-                        cbsfStep :: CallbackSystemStepFunction
+                        cbsfStep :: CallbackSystemStepFunction,
+                        edGet :: EntityGetDataFunction,
+                        edRead :: EntityDataReadFunction,
+                        edRelease :: EntityDataReleaseFunction
                       }
 
 dynamicEI :: IORef EntityInterface
 {-# NOINLINE dynamicEI #-}
 dynamicEI = unsafePerformIO ( 
   do
+    print $ "in function dynmicEI Start"
+
     libname <- getEnv "INTONACO_LIB"
     dll <- dlopen libname [RTLD_NOW]
+
     efc <- dlsym dll "entity_create"
     let efc' = mkEntityCreateFunction efc
+
     efs <- dlsym dll "entity_set" 
     let efs' = mkEntitySetFunction efs
 
@@ -124,8 +148,17 @@ dynamicEI = unsafePerformIO (
     cbs <- dlsym dll "callback_system_step" 
     let cbs' = mkCallbackSystemStepFunction cbs
 
+    edg <- dlsym dll "entity_get_data"
+    let edg' = mkEntityGetDataFunction edg
 
-    ref <- newIORef $ EntityInterface efc' efs' cbc' cbr' cbs'
+    edr <- dlsym dll "entity_data_read"
+    let edr' = mkEntityDataReadFunction edr
+
+    edd <- dlsym dll "entity_data_release"
+    let edd' = mkEntityDataReleaseFunction edd
+
+    print $ "in function dynmicEI End"
+    ref <- newIORef $ EntityInterface efc' efs' cbc' cbr' cbs' edg' edr' edd'
     return ref
   )
 
@@ -146,8 +179,6 @@ entityCreate a1 =
   peek  a2' >>= \a2'' -> 
   return (a2'')
 
-{-# LINE 46 "CFunctions.chs" #-}
-
 
 entitySet :: (ByteString) -> (Ptr ()) -> IO ()
 entitySet a1 a2 =
@@ -158,7 +189,34 @@ entitySet a1 a2 =
     (efSet dei) a1'1  a1'2 a2') >>
   return ()
 
-{-# LINE 53 "CFunctions.chs" #-}
+entityGetData :: (Ptr ()) -> Word64 -> IO ((Ptr ()))
+entityGetData a1 a2 =
+  alloca $ \a3' -> 
+  (do
+    dei <- readIORef dynamicEI
+    (edGet dei) a1 (fromIntegral a2) a3') >>
+  peek a3' >>= \a3'' -> 
+  return (a3'')
+
+entityDataRead :: Ptr () -> IO ByteString
+entityDataRead a1 =
+  alloca $ \a2' -> 
+  alloca $ \a3' -> 
+  (do
+    dei <- readIORef dynamicEI
+    (edRead dei) a1 a2' a3') >>
+  peek a2' >>= \a2'' ->
+  peek  a3' >>= \a3'' ->
+  (do
+     bs <- packCStringLen (a2'', fromIntegral a3'')
+     return bs
+    ) 
+
+entityDataRelease :: Ptr () -> IO ()
+entityDataRelease a1 = do
+    dei <- readIORef dynamicEI
+    (edRelease dei) a1
+    return ()
 
 callbackSystemCreate :: IO ((Ptr ()))
 callbackSystemCreate =
@@ -169,10 +227,7 @@ callbackSystemCreate =
   peek  a1'>>= \a1'' -> 
   return (a1'')
 
-{-# LINE 59 "CFunctions.chs" #-}
-
-
-callbackSystemRegisterReceiver :: (Ptr ()) -> (Ptr ()) -> (Word64) -> (FunPtr (Ptr () -> Ptr CChar -> CInt -> IO CInt)) -> IO ()
+callbackSystemRegisterReceiver :: (Ptr ()) -> (Ptr ()) -> (Word64) -> (FunPtr (Ptr () -> CULong -> Ptr CChar -> CInt -> IO CInt)) -> IO ()
 callbackSystemRegisterReceiver a1 a2 a3 a4 =
   let {a1' = id a1} in 
   let {a2' = id a2} in 
@@ -183,9 +238,6 @@ callbackSystemRegisterReceiver a1 a2 a3 a4 =
     (cbsfRegisterReceiver dei) a1' a2' a3' a4') >>
   return ()
 
-{-# LINE 68 "CFunctions.chs" #-}
-
-
 callbackSystemStep :: (Ptr ()) -> IO ()
 callbackSystemStep a1 =
   let {a1' = id a1} in 
@@ -193,7 +245,5 @@ callbackSystemStep a1 =
     dei <- readIORef dynamicEI
     (cbsfStep dei) a1') >>
   return ()
-
-{-# LINE 74 "CFunctions.chs" #-}
 
 

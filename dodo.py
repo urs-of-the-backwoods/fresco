@@ -47,7 +47,7 @@ def task_intonaco():
 	yield {
 		'name' : 'compile',
 	    'actions': ['cd intonaco && cargo build'],
-	    'file_dep': ['intonaco/src/lib.rs'],
+	    'file_dep': ['intonaco/src/lib.rs', 'intonaco/src/lockfree_value.rs', 'intonaco/src/thread_guard.rs'],
 	    'targets': ['intonaco/target/debug/libintonaco.so'],
 	} 
 
