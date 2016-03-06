@@ -18,10 +18,10 @@ module Fresco.Entity (
 --   Entities are a kind of simplified extensible record system. They are basically a Map from ComponentType (64 bit id) to a data item with 
 --   ComponentClass Typeclass. Basic entities are non-mutable but their exists the entity reference.
 
-  EntityData,
+--  EntityData,
   (#:),
-  (#!),
-  (#),
+--  (#!),
+--  (#),
 
 -- * Entity Type
 --   The ERef type, which puts an EntityData into
@@ -40,11 +40,6 @@ module Fresco.Entity (
  createCBS,
  stepCBS,
  registerReceiverCBS,
--- * Listener
--- Mechanism to register listener on ComponentTypes of ERef
-
---  addListener,
---  clearListeners
 
 )
 where
@@ -110,7 +105,7 @@ stepCBS (CallbackSystem cbs) = callbackSystemStep cbs
 
 
 registerReceiverCBS :: ComponentClass a => CallbackSystem -> Entity -> ComponentType a -> (a -> IO ()) -> IO ()
-registerReceiverCBS (CallbackSystem cbs) (Entity _ _ ep) (ComponentType ct) f = do
+registerReceiverCBS (CallbackSystem cbs) (Entity ep) (ComponentType ct) f = do
   -- MsgFunction: Ptr () -> CULong -> Ptr CChar -> CInt -> IO CInt
   let f' = \_ _ cdata len -> do
                                 bs <- packCStringLen (cdata, fromIntegral len)
@@ -128,35 +123,11 @@ registerReceiverCBS (CallbackSystem cbs) (Entity _ _ ep) (ComponentType ct) f = 
 
 -- Listener Map, for each k, manages a map of writers, writers geting the old and the new value after a change
 
-type Listeners = IORef (M.Map Word64 [EntityData -> EntityData -> IO ()])
+-- type Listeners = IORef (M.Map Word64 [EntityData -> EntityData -> IO ()])
+type Listeners = ()
 
 -- | ERef, composable objects, referenced Entities with listeners
-data Entity = Entity (IORef EntityData) Listeners (Ptr ()) deriving (Eq)
-
-
-
-
--- | Add an action (IO function), which will be executed when value of ComponentType is changed
-addListener :: Entity -> ComponentType a -> (EntityData -> EntityData -> IO ()) -> IO ()
-addListener (Entity _ tls ep) (ComponentType c) l = atomicModifyIORef tls (\m -> let
-            l' = case M.lookup c m of
-                           Just ol -> ol ++ [l]
-                           Nothing -> [l]
-            in (M.insert c l' m, ()))
-
--- | Clear all listeners from Entity
-clearListeners :: Entity -> IO ()
-clearListeners (Entity _ tls ep) = atomicWriteIORef tls (M.fromList [])
-
-fireListeners :: Entity -> ComponentType a -> EntityData -> EntityData -> IO ()
-fireListeners (Entity _ tls ep) (ComponentType c) val val' = do
-              ls <- readIORef tls
-              case M.lookup c ls of
-                   Just l -> mapM (\f -> f val val') l >> return ()
-                   Nothing -> return ()
-
-
-
+data Entity = Entity (Ptr ()) deriving (Eq)
 
 msgFromE :: EntityData -> Component
 msgFromE ed = let 
@@ -173,14 +144,12 @@ msgFromC (ComponentType u) e = let
 newE :: [(Word64, Component)] -> IO Entity
 newE inlist = do
      let e = entityData inlist
-     te <- newIORef e
-     tl <- newIORef (M.fromList [])
      ep <- entityCreate (msgFromE e)
-     return $ Entity te tl ep
+     return $ Entity ep
 
 -- | reads one ComponentType, throws exception, if ComponentType not present, or wrong type
 readC :: ComponentClass a => Entity -> ComponentType a -> IO a
-readC (Entity te _ ep) (ComponentType ct) = do
+readC (Entity ep) (ComponentType ct) = do
   edat <- entityGetData ep ct
   bs <- entityDataRead edat
   entityDataRelease edat
@@ -188,33 +157,17 @@ readC (Entity te _ ep) (ComponentType ct) = do
 
 -- | updates one ComponentType
 updateC :: ComponentClass a => Entity -> ComponentType a -> (a -> a) -> IO ()
-updateC er@(Entity te tl ep) c f = do
-        (e, e') <- atomicModifyIORef te (\olde -> let
-                    newe = updateDataC olde c f
-                    in (newe, (olde, newe)))
-        entitySet (msgFromC c e) ep
-        fireListeners er c e e'
-        return ()
+updateC er@(Entity ep) c f = do
+  val <- readC er c
+  let val' = f val
+  setC er c val'
+  return ()
 
 -- | sets one ComponentType
 setC :: ComponentClass a => Entity -> ComponentType a -> a -> IO ()
-setC er@(Entity te tl ep) c val = do
-        (e, e') <- atomicModifyIORef te (\olde -> let
-                    newe = setDataC olde c val
-                    in (newe, (olde, newe)))
-        entitySet (msgFromC c e) ep
-        fireListeners er c e e'
+setC er@(Entity ep) (ComponentType ct) val = do
+        let d = Data.ByteString.concat [encode (ObjectUInt (fromIntegral ct)), toMsg val]
+        entitySet d ep
         return ()
 
--- | sets one ComponentType as Component
-_setC' :: Entity -> Word64 -> Component -> IO ()
-_setC' er@(Entity te tls ep) c val = do
-        (e, e') <- atomicModifyIORef te (\olde -> let
-                    newe = M.insert c val olde
-                    in (newe, (olde, newe)))
-        ls <- readIORef tls
-        case M.lookup c ls of
-             Just l -> mapM (\f -> f e e') l >> return ()
-             Nothing -> return ()
-        return ()
 
