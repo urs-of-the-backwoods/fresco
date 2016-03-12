@@ -9,6 +9,11 @@
 //  file: arriccio/main.go
 //
 
+// arriccio - implemented as an executable named "aio" - is a component loader with dependency injection.
+// Components are described in a toml file and stored together with their implementation files on the web.
+// On invocation aio will download and execute them.
+// It is possible to alias local directories for a component, to enable local development and testing.
+
 package main
 
 import (
@@ -328,11 +333,10 @@ func loadPublicKey(path string) ssh.PublicKey {
     if err != nil {
     	log.Fatal("error open public key file: ", err)
     }
-    rsa, cmt, _, _, err2 := ssh.ParseAuthorizedKey(bs)
+    rsa, _, _, _, err2 := ssh.ParseAuthorizedKey(bs)
     if err2 != nil {
     	log.Fatal("error cannot parse public key file: ", err2)
     }
-    println(cmt)
     return rsa
 }
 
@@ -380,8 +384,10 @@ func main() {
 		println("  aio verify <file> <public key>   - verify if signature is correct")
 		println("")
 		println("  aio debug <name> | <url> [args]  - process a target url and print resulting command witout executing")
+		println("  aio version  					- displays version information")
+		println("  aio info <name> | <url>		    - prints information about a component")
 		println("")
-		println("  aio <name> | <url> [args]        - executes a target url")
+		println("  aio <name> | <url> [args]        - executes a target component with optional args")
 		println("")
 	} else {
 
@@ -389,6 +395,10 @@ func main() {
 
 		switch os.Args[1] {
 
+		case "version":
+			{
+				println("aio version 0.1.0 running on", runtime.GOARCH + "-" + runtime.GOOS);
+			}
 		// aio alias <name> <url>
 		// aio remove-alias <name>
 		case "alias":
@@ -481,7 +491,15 @@ func main() {
 		case "debug":
 			{
 				if len(os.Args) >= 3 {
-					runInterfaceWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true)
+					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true)
+				}
+			}
+
+		case "info":
+			{
+				httpClient = createClient()
+				if len(os.Args) == 3 {
+					showComponentInfo(os.Args[2], db);
 				}
 			}
 
@@ -489,7 +507,7 @@ func main() {
 		default:
 			if len(os.Args) >= 2 {
 				httpClient = createClient()
-				runInterfaceWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false)
+				runComponentWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false)
 			}
 
 		}
@@ -618,19 +636,20 @@ func writeAliasDB(db AliasDB) {
 //
 
 //
-// Recipes
+// Components
 //
 
-// Interface describes an abstract interface of some functionality or data.
-// This interface is then implemented by different implementations.
-type Interface struct {
+// Components describe some functionality or data. They can be implemented for different platforms, os.
+type Component struct {
 	Id          string // Url as id
-	Purpose     string // short summary of interface purpose
+	Purpose     string // short summary of component purpose
 	Description string // longer description
+
+	Impls []Implementation
 }
 
-// Implementation describes the properties of an implementation of an interface.
-// In addition to metadata it also contains the interfaces, it depends on, the dependencies.
+// Implementation describes the properties of an implementation of a component.
+// In addition to metadata it also contains the components, it depends on, the dependencies.
 type Implementation struct {
 	Version      string
 	Architecture string
@@ -644,7 +663,7 @@ type Implementation struct {
 	Dependencies []Dependency
 }
 
-// A dependency describes on which other interfaces an implementation of an interface depends on.
+// A dependency describes on which other components an implementation of a component depends on.
 // There is a version constraint, which says which range of versions is acceptable for the implementation.
 type Dependency struct {
 	Id                string
@@ -652,47 +671,41 @@ type Dependency struct {
 	Environment       []string
 }
 
-// A recipe combines an interface with information on its different implementations.
-type Recipe struct {
-	If    Interface
-	Impls []Implementation
-}
+// routines to manage components
 
-func readRecipe(dat string) Recipe {
-	var db Recipe
+func readComponent(dat string) Component {
+	var db Component
 	_, err := toml.Decode(string(dat), &db)
 	if err != nil {
-		log.Fatal("cannot read recipe ", err)
+		log.Fatal("cannot read component ", err)
 	}
 	return db
 }
 
-func writeRecipe(db Recipe, fname string) {
+func writeComponent(db Component, fname string) {
 	var buf bytes.Buffer
 	e := toml.NewEncoder(&buf)
 	err := e.Encode(db)
 	if err != nil {
-		log.Fatal("cannot write recipe ", err)
+		log.Fatal("cannot write component ", err)
 	} else {
 		ioutil.WriteFile(fname, buf.Bytes(), 0660)
 	}
 }
 
-func exampleRecipe() Recipe {
-	aif := Recipe{
-		Interface{
-			"http://www.example.com/interface/IFName",
-			"Short purpose of IF",
-			"Longer description of IF",
-		},
+func exampleComponent() Component {
+	aif := Component{
+		"http://www.example.com/component/IFName",
+		"Short purpose of IF",
+		"Longer description of IF",
 		make([]Implementation, 0),
 	}
 	return aif
 }
 
-func getRecipeFromUrl(db AliasDB, url string) (Recipe, string) {
+func getComponentFromUrl(db AliasDB, url string) (Component, string) {
 	fname := ""
-	ifloc := ""  // interface location, directory if locally found
+	ifloc := ""  // component location, directory if locally found
 
 	// check url
 	var dat []byte
@@ -715,9 +728,9 @@ func getRecipeFromUrl(db AliasDB, url string) (Recipe, string) {
 		}
 		dat, _ = ioutil.ReadFile(fname)
 	} else {
-		log.Fatal("Interface id is not a valid url: ", url)
+		log.Fatal("Component id is not a valid url: ", url)
 	}
-	aif := readRecipe(string(dat))
+	aif := readComponent(string(dat))
 	return aif, ifloc
 }
 
@@ -739,7 +752,7 @@ func (s ImplList) Less(i, j int) bool {
 
 
 //
-// Processing Recipes, running commands with dependency injection
+// Processing Components, running commands with dependency injection
 //
 
 // We process dependency resolution in steps, each step adds some information to the results.
@@ -783,7 +796,7 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency) (bool, []
 		url = val
 	}
 	// load toml file, returns directory, if locally found
-	aif, ifloc := getRecipeFromUrl(db, url)
+	aif, ifloc := getComponentFromUrl(db, url)
 
 	// resultlist
 	rlist := []DependencyProcessingInfo{}
@@ -826,7 +839,7 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency) (bool, []
 
 		if depsok {
 			location := ""
-			// special handling of local directories: if interface was found locally and subdirectory of
+			// special handling of local directories: if component was found locally and subdirectory of
 			// implementation exists, then set location to this subdirectory.
 			if ifloc != "" {
 				// get last part of url
@@ -1044,7 +1057,24 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 
 // aio run <name | url>, cmd = <name | url>
 
-func runInterfaceWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool) {
+func showComponentInfo(cmd string, db AliasDB) {
+	// url is either given or taken from alias database
+	url := cmd
+	// check, do we have an alias for command
+	if val, ok := db.Commands[cmd]; ok {
+		url = val
+	}
+
+	aif, _ := getComponentFromUrl(db, url);
+
+	println("Component Info on:", aif.Id, "\n");
+	println("Purpose:");
+	println(aif.Purpose, "\n");
+	println("Description:");
+	println(aif.Description);
+}
+
+func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool) {
 
 	// url is either given or taken from alias database
 	url := cmd

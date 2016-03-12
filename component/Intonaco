@@ -1,12 +1,11 @@
 # arriccio.toml file for Intonaco (Fresco Runtime)
 
-[If]
-  Id = "http://www.hgamer3d.org/interface/Intonaco"
-  Purpose = "Runtime of Fresco Freamework - Intonaco"
-  Description = """
-	The component which glues everything together. 
-	A runtime component handling the low-level components.
-  """
+Id = "http://www.hgamer3d.org/component/Intonaco"
+Purpose = "Runtime of Fresco Freamework - Intonaco"
+Description = """
+The component which glues everything together. 
+A runtime component handling the low-level components.
+"""
 
 [[Impls]]
   # 64 bit, linux implementation

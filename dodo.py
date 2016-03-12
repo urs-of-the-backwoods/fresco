@@ -10,7 +10,7 @@
 #
 
 import os, os.path, platform
-from doit.tools import config_changed
+from doit.tools import config_changed, run_once
 
 def get_os():
 	os = platform.system()
@@ -73,13 +73,13 @@ def task_intonaco():
 	yield {
 		'name' : 'arriccio',
 	    'actions': [
-	    	(copy_file_replace, ['interface/Intonaco', {'{version}' : version_intonaco} ]),
-			'aio local http://www.hgamer3d.org/interface/Intonaco build-intonaco || true',
+	    	(copy_file_replace, ['component/Intonaco', {'{version}' : version_intonaco} ]),
+			'aio local http://www.hgamer3d.org/component/Intonaco build-intonaco || true',
 	    ],
 	    'targets': ['build-intonaco/arriccio.toml'], 
 	    'uptodate': [config_changed(version_intonaco)],
 	    'file_dep': [
-			'interface/Intonaco',
+			'component/Intonaco',
 		]
 	} 
 
@@ -159,16 +159,32 @@ def task_sinopia():
 	} 
 
 def task_arriccio():
-	os.environ['GOPATH'] =os.path.abspath('../go-home')
-	return {
-	    'actions': ['cd arriccio && go build -o aio main.go && cp aio ~/.local/bin/aio'],
+	os.environ['GOPATH'] = os.path.abspath('../go-home')
+	yield {
+		'name': 'golibs',
+		'actions': [
+			'mkdir -p ../go-home',
+			'go get golang.org/x/crypto/ripemd160',
+			'go get github.com/BurntSushi/toml',
+			'go get github.com/asaskevich/govalidator',
+		],
+		'targets': [
+					'../go-home',
+					'../go-home/src/github.com/asaskevich',
+					'../go-home/src/github.com/BurntSushi',
+					'../go-home/src/golang.org/x/crypto/ripemd160',
+		],
+        'uptodate': [run_once],
+	}
 
+	yield {
+		'name': 'compile',
+	    'actions': ['cd arriccio && go build -o aio main.go && cp aio ~/.local/bin/aio'],
+		'targets' : ['arriccio/aio',
+		],
 	    'file_dep': [
 			'arriccio/main.go',
 			],
-		'targets' : ['arriccio/aio',
-					 '~/.local/bin/aio'
-		]
 	} 
 
  
