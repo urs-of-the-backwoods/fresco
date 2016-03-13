@@ -384,8 +384,8 @@ func main() {
 		println("  aio verify <file> <public key>   - verify if signature is correct")
 		println("")
 		println("  aio debug <name> | <url> [args]  - process a target url and print resulting command witout executing")
-		println("  aio version  					- displays version information")
-		println("  aio info <name> | <url>		    - prints information about a component")
+		println("  aio version                      - displays version information")
+		println("  aio info <name> | <url>          - prints information about a component")
 		println("")
 		println("  aio <name> | <url> [args]        - executes a target component with optional args")
 		println("")
@@ -644,6 +644,7 @@ type Component struct {
 	Id          string // Url as id
 	Purpose     string // short summary of component purpose
 	Description string // longer description
+	SigningKey	string // https location of public key for signature
 
 	Impls []Implementation
 }
@@ -656,7 +657,7 @@ type Implementation struct {
 	OS           string
 
 	Location     string // download Url tgz
-	PGPKey		 string // https location of public key for signature
+	SigningKey	 string // https location of public key for signature
 
 	Command      string
 	Environment  []string
@@ -698,6 +699,7 @@ func exampleComponent() Component {
 		"http://www.example.com/component/IFName",
 		"Short purpose of IF",
 		"Longer description of IF",
+		"",
 		make([]Implementation, 0),
 	}
 	return aif
@@ -709,6 +711,8 @@ func getComponentFromUrl(db AliasDB, url string) (Component, string) {
 
 	// check url
 	var dat []byte
+	internet := false
+
 	if isUrlValid(url) {
 		// check if local dir overwrite
 		if val, ok := db.Locals[url]; ok {
@@ -725,12 +729,29 @@ func getComponentFromUrl(db AliasDB, url string) (Component, string) {
 			}
 		} else {
 			fname = getUrlAsCachedFile(url)
+			internet = true
 		}
 		dat, _ = ioutil.ReadFile(fname)
 	} else {
 		log.Fatal("Component id is not a valid url: ", url)
 	}
 	aif := readComponent(string(dat))
+
+	if internet {
+		// check, if url is correct
+		if url != aif.Id {
+			log.Fatal("downloaded component description has not correct id!\n   url:", url, "\n   id:", aif.Id)
+		}
+
+		fsig :=  getUrlAsCachedFile(url + ".sig")
+		fkey :=  getUrlAsCachedFile(aif.SigningKey)
+
+		// check signature
+		if (!verifyFile(fname, fsig, fkey)) {
+			log.Fatal("downloaded component description not correctly signed: ", url)
+		}
+	}
+
 	return aif, ifloc
 }
 
@@ -899,7 +920,7 @@ func enrichDepProcInfoWithInstallDir(db AliasDB, depi []DependencyProcessingInfo
 
 			fname, isCached := checkUrlIsCached(el.implem.Location)
 			if !isCached {
-				ilist = append(ilist, InstallInfo{el.implem.Location, el.implem.PGPKey, fname})
+				ilist = append(ilist, InstallInfo{el.implem.Location, el.implem.SigningKey, fname})
 			}
 
 			// enrich output with directory name
@@ -931,7 +952,7 @@ func installDownloads(infos []InstallInfo) {
 
 			// check key is https - important for security !!!
 			if len(key) < 9 || key[0:8] != "https://" {
-				log.Fatal("key file has to be https download, which is is not: ", key)
+				log.Fatal("key file has to be downloaded over https, not http: ", key)
 			}
 
 			// download data file, signature and key
@@ -1046,6 +1067,12 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 //			env = evaluateEnvSetting(env, []string{"add-path PATH ."}, el.installdir)
 		}
 	}	
+
+	// if binary still empty, take first argument as binary
+	if binary == "" && len(arglist) > 0 {
+		binary = arglist[0] 
+		arglist = arglist[1:]
+	}
 
 	// run command
 	cmd := exec.Command(binary, arglist...)

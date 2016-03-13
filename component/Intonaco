@@ -6,14 +6,31 @@ Description = """
 The component which glues everything together. 
 A runtime component handling the low-level components.
 """
+signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
 
 [[Impls]]
   # 64 bit, linux implementation
   location = "http://www.hgamer3d.org/downloads/intonaco-amd64-linux-{version}.tar.gz"
-  pgpkey = "https://www.github.com/urs-of-the-backwoods.keys"
+  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
   version = "{version}"
   architecture = "amd64"
   os = "linux"
+
+[[Impls]]
+  # 64 bit, windows implementation
+  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-windows-{version}.tar.gz"
+  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
+  version = "{version}"
+  architecture = "amd64"
+  os = "windows"
+
+[[Impls]]
+  # 64 bit, linux implementation
+  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-darwin-{version}.tar.gz"
+  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
+  version = "{version}"
+  architecture = "amd64"
+  os = "darwin"
 
 
 
