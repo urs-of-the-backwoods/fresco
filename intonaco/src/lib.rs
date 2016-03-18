@@ -392,7 +392,7 @@ lazy_static! {
         let mut v = Vec::new();
         for (env, libf) in vars()
                         {   
-                            if env == "INTONACO" {
+                            if env == "GIORNATA" {
                                 let queue = Arc::new(MsQueue::new());
                                 {
                                     let queue1 = queue.clone();

@@ -9,7 +9,7 @@
 --  file: haskell/Fresco/System.hs
 --
 
-{-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE ForeignFunctionInterface, CPP #-}
 
 -- | Helper functions for binding ffi, encoding, decoding via messagepack
 module Fresco.System
@@ -30,7 +30,12 @@ import Foreign.Ptr
 
 import Fresco.Component
 
+#ifdef UseWinDLLLoading
+import System.Win32.DLL
+#else
 import System.Posix.DynamicLinker
+#endif
+
 import System.Environment
 import System.IO.Unsafe
 import Data.IORef
@@ -124,6 +129,43 @@ data EntityInterface = EntityInterface {
                         edRelease :: EntityDataReleaseFunction
                       }
 
+#ifdef UseWinDLLLoading
+dynamicEI :: IORef EntityInterface
+dynamicEI = unsafePerformIO (do
+    libname <- getEnv "INTONACO_LIB"
+    dll <- loadLibrary libname
+
+    efc <- getProcAddress dll "entity_create"
+    let efc' = mkEntityCreateFunction $ castPtrToFunPtr efc
+
+    efs <- getProcAddress dll "entity_set" 
+    let efs' = mkEntitySetFunction $ castPtrToFunPtr efs
+
+    cbc <- getProcAddress dll "callback_system_create" 
+    let cbc' = mkCallbackSystemCreateFunction $ castPtrToFunPtr cbc
+
+    cbr <- getProcAddress dll "callback_system_register_receiver" 
+    let cbr' = mkCallbackSystemRegisterReceiverFunction $ castPtrToFunPtr cbr
+
+    cbs <- getProcAddress dll "callback_system_step" 
+    let cbs' = mkCallbackSystemStepFunction $ castPtrToFunPtr cbs
+
+    edg <- getProcAddress dll "entity_get_data"
+    let edg' = mkEntityGetDataFunction $ castPtrToFunPtr edg
+
+    edr <- getProcAddress dll "entity_data_read"
+    let edr' = mkEntityDataReadFunction $ castPtrToFunPtr edr
+
+    edd <- getProcAddress dll "entity_data_release"
+    let edd' = mkEntityDataReleaseFunction $ castPtrToFunPtr edd
+
+    ref <- newIORef $ EntityInterface efc' efs' cbc' cbr' cbs' edg' edr' edd'
+    return ref
+    )
+
+  
+
+#else
 dynamicEI :: IORef EntityInterface
 {-# NOINLINE dynamicEI #-}
 dynamicEI = unsafePerformIO ( 
@@ -158,7 +200,7 @@ dynamicEI = unsafePerformIO (
     ref <- newIORef $ EntityInterface efc' efs' cbc' cbr' cbs' edg' edr' edd'
     return ref
   )
-
+#endif
 
 type CStringCLen i = (CString, i)
 

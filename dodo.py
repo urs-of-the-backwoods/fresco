@@ -12,6 +12,11 @@
 import os, os.path, platform
 from doit.tools import config_changed, run_once
 
+def make_dir(d, targets):
+	d = d.replace("/", os.sep)
+	if not os.path.exists(d):
+		os.makedirs(d)
+
 def get_os():
 	os = platform.system()
 	if os == "Linux":
@@ -49,7 +54,10 @@ def copy_file_replace(file_in, replace_dict, targets):
 		        fout.write(line_out)
 
 def task_intonaco():
-
+	if platform.system() == "Windows":
+		intonaco_lib = "intonaco.dll"
+	else:
+		intonaco_lib = "libintonaco.so"
 	yield {
 		'name' : 'compile',
 	    'actions': ['cd intonaco && cargo build'],
@@ -59,14 +67,15 @@ def task_intonaco():
 
 	yield {
 		'name' : 'build-dir',
-		'actions' : ['mkdir -p build-intonaco',
-					 'mkdir -p build-intonaco/intonaco-' + arch_os + '-' + version_intonaco,
-					 'cp intonaco/target/debug/libintonaco.so build-intonaco/intonaco-' + arch_os + '-' + version_intonaco,
+		'actions' : [
+	    			 (make_dir, ['build-intonaco']),
+	    			 (make_dir, ['build-intonaco/intonaco-' + arch_os + '-' + version_intonaco]),
+					 'cp intonaco/target/debug/' + intonaco_lib + ' build-intonaco/intonaco-' + arch_os + '-' + version_intonaco + '/intonaco.gio',
 		],
 	    'file_dep': [
-			'intonaco/target/debug/libintonaco.so',
+			'intonaco/target/debug/' + intonaco_lib,
 			],
-		'targets' : ['build-intonaco/intonaco-' + arch_os + '-' + version_intonaco + '/libintonaco.so',
+		'targets' : ['build-intonaco/' + intonaco_lib + '-' + arch_os + '-' + version_intonaco + '/intonaco.gio',
 	    		   ],
 	}
 
@@ -102,7 +111,7 @@ def task_haskell():
 		'actions' : [
 					 'cd haskell && stack build',
 					 'cd haskell && stack sdist',
-					 'mkdir -p build-haskell',
+	    			 (make_dir, ['build-haskell']),
 					 'cd haskell && bash -c "cp `find .stack-work | grep .tar.gz` ../build-haskell"'
 					],
 		'targets' : ['build-haskell/fresco-binding-' + version_haskell_fresco + '.tar.gz'],
@@ -128,7 +137,8 @@ def task_tests():
 
 	yield {
 		'name' : 'build-dir',
-		'actions' : ['mkdir -p build-tests',
+		'actions' : [
+	    			 (make_dir, ['build-tests']),
 					 'cp test_hg3d/cube-rust/target/debug/cube-rust build-tests',
 					 'cp interface/Cube build-tests',
 		],
@@ -163,7 +173,7 @@ def task_arriccio():
 	yield {
 		'name': 'golibs',
 		'actions': [
-			'mkdir -p ../go-home',
+   			 (make_dir, ['../go-home']),
 			'go get golang.org/x/crypto/ripemd160',
 			'go get github.com/BurntSushi/toml',
 			'go get github.com/asaskevich/govalidator',
