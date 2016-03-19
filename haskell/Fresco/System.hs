@@ -50,20 +50,20 @@ fromMsg bs = case decode bs of
 
 -- helper functions
 
-type MsgFunction = Ptr () -> CULong -> Ptr CChar -> CInt -> IO CInt
+type MsgFunction = Ptr () -> Word64 -> Ptr CChar -> Word32 -> IO Word32
 foreign import ccall "dynamic" 
    mkMsgFun :: FunPtr MsgFunction -> MsgFunction
 foreign import ccall "wrapper"
    mkMsgFunPtr :: MsgFunction -> IO (FunPtr MsgFunction)
 
-callMsgFunction :: FunPtr MsgFunction -> Ptr () -> CULong -> ByteString -> IO Int
+callMsgFunction :: FunPtr MsgFunction -> Ptr () -> Word64 -> ByteString -> IO Int
 callMsgFunction mf p ct msg = do
       let f = mkMsgFun mf
       let dat = msg
       unsafeUseAsCStringLen' dat $ \(dat'1, dat'2) -> f p ct dat'1  dat'2 >>= \res -> return (fromIntegral res)
 --      unsafeUseAsCStringLen' dat $ \(dat'1, dat'2) -> print "msgfun" >> print dat'1 >> print dat'2 >> f p dat'1  dat'2 >>= \res -> return (fromIntegral res)
 
-type InitFunction = Ptr () -> IO CInt
+type InitFunction = Ptr () -> IO Word32
 foreign import ccall "dynamic" 
    mkInitFun :: FunPtr InitFunction -> InitFunction
 
@@ -78,21 +78,21 @@ callInitFunction ifp p = do
 
 -- Entity Interface
 
-type EntityCreateFunction = ((Ptr CChar) -> (CInt -> ((Ptr (Ptr ())) -> (IO ())))) 
+type EntityCreateFunction = ((Ptr CChar) -> (Word32 -> ((Ptr (Ptr ())) -> (IO ())))) 
 foreign import ccall "dynamic" 
    mkEntityCreateFunction :: FunPtr EntityCreateFunction -> EntityCreateFunction
 
-type EntitySetFunction = ((Ptr CChar) -> (CInt -> ((Ptr ()) -> (IO ()))))
+type EntitySetFunction = ((Ptr CChar) -> (Word32 -> ((Ptr ()) -> (IO ()))))
 foreign import ccall "dynamic" 
    mkEntitySetFunction :: FunPtr EntitySetFunction -> EntitySetFunction
 
 -- pub extern "C" fn entity_get_data(ep: EntityPointer, ct: u64, pp: *mut *mut DataPointer) 
-type EntityGetDataFunction = ((Ptr ()) -> CULong -> (Ptr (Ptr ())) -> IO ())
+type EntityGetDataFunction = ((Ptr ()) -> Word64 -> (Ptr (Ptr ())) -> IO ())
 foreign import ccall "dynamic" 
    mkEntityGetDataFunction :: FunPtr EntityGetDataFunction -> EntityGetDataFunction
 
 -- pub extern "C" fn entity_data_read(dp: *mut DataPointer, p_cp: *mut *const libc::c_char, p_len: *mut libc::c_int)
-type EntityDataReadFunction = ((Ptr ()) -> (Ptr (Ptr CChar)) -> (Ptr CInt) -> IO ())
+type EntityDataReadFunction = ((Ptr ()) -> (Ptr (Ptr CChar)) -> (Ptr Word32) -> IO ())
 foreign import ccall "dynamic" 
    mkEntityDataReadFunction :: FunPtr EntityDataReadFunction -> EntityDataReadFunction
 
@@ -109,7 +109,7 @@ foreign import ccall "dynamic"
    mkCallbackSystemCreateFunction :: FunPtr CallbackSystemCreateFunction -> CallbackSystemCreateFunction
 
 -- pub extern "C" fn callback_system_register_receiver (cbs: *mut CallbackSystem, ep: EntityPointer, ct: u64, mfp: MessageFunctionPointer) {
-type CallbackSystemRegisterReceiverFunction = ((Ptr ()) -> ((Ptr ()) -> (CULong -> ((FunPtr ((Ptr ()) -> (CULong -> ((Ptr CChar) -> (CInt -> (IO CInt))))) -> (IO ()))))))
+type CallbackSystemRegisterReceiverFunction = ((Ptr ()) -> ((Ptr ()) -> (Word64 -> ((FunPtr ((Ptr ()) -> (Word64 -> ((Ptr CChar) -> (Word32 -> (IO Word32))))) -> (IO ()))))))
 foreign import ccall "dynamic"
    mkCallbackSystemRegisterReceiverFunction :: FunPtr CallbackSystemRegisterReceiverFunction -> CallbackSystemRegisterReceiverFunction
 
@@ -131,8 +131,9 @@ data EntityInterface = EntityInterface {
 
 #ifdef UseWinDLLLoading
 dynamicEI :: IORef EntityInterface
+{-# NOINLINE dynamicEI #-}
 dynamicEI = unsafePerformIO (do
-    libname <- getEnv "INTONACO_LIB"
+    libname <- getEnv "INTONACO"
     dll <- loadLibrary libname
 
     efc <- getProcAddress dll "entity_create"
@@ -170,7 +171,7 @@ dynamicEI :: IORef EntityInterface
 {-# NOINLINE dynamicEI #-}
 dynamicEI = unsafePerformIO ( 
   do
-    libname <- getEnv "INTONACO_LIB"
+    libname <- getEnv "INTONACO"
     dll <- dlopen libname [RTLD_NOW]
 
     efc <- dlsym dll "entity_create"
@@ -266,7 +267,7 @@ callbackSystemCreate =
   peek  a1'>>= \a1'' -> 
   return (a1'')
 
-callbackSystemRegisterReceiver :: (Ptr ()) -> (Ptr ()) -> (Word64) -> (FunPtr (Ptr () -> CULong -> Ptr CChar -> CInt -> IO CInt)) -> IO ()
+callbackSystemRegisterReceiver :: (Ptr ()) -> (Ptr ()) -> (Word64) -> (FunPtr (Ptr () -> Word64 -> Ptr CChar -> Word32 -> IO Word32)) -> IO ()
 callbackSystemRegisterReceiver a1 a2 a3 a4 =
   let {a1' = id a1} in 
   let {a2' = id a2} in 

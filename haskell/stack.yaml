@@ -9,8 +9,7 @@
 #  file: haskell/stack.yaml
 #
 
-extra-deps: ["messagepack-0.5.0"]
-resolver: lts-3.4
+resolver: lts-5.8
 flags: {}
 packages:
 - '.'
