@@ -384,8 +384,11 @@ func main() {
 		println("  aio verify <file> <public key>   - verify if signature is correct")
 		println("")
 		println("  aio debug <name> | <url> [args]  - process a target url and print resulting command witout executing")
+		println("  aio unsafe <name> | <url> [args] - process a target url without asking for confirmation")
 		println("  aio version                      - displays version information")
+		println("")
 		println("  aio info <name> | <url>          - prints information about a component")
+		println("  aio license <name> | <url>       - prints detailed license information about a component")
 		println("")
 		println("  aio <name> | <url> [args]        - executes a target component with optional args")
 		println("")
@@ -491,7 +494,15 @@ func main() {
 		case "debug":
 			{
 				if len(os.Args) >= 3 {
-					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true)
+					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true, false)
+				}
+			}
+
+		// aio unsafe <name | url>
+		case "unsafe":
+			{
+				if len(os.Args) >= 3 {
+					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, true)
 				}
 			}
 
@@ -503,11 +514,19 @@ func main() {
 				}
 			}
 
+		case "license":
+			{
+				httpClient = createClient()
+				if len(os.Args) == 3 {
+					showLicenseInfo(os.Args[2], db);
+				}
+			}
+
 		// aio <name | url>
 		default:
 			if len(os.Args) >= 2 {
 				httpClient = createClient()
-				runComponentWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false)
+				runComponentWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false, false)
 			}
 
 		}
@@ -645,6 +664,8 @@ type Component struct {
 	Purpose     string // short summary of component purpose
 	Description string // longer description
 	SigningKey	string // https location of public key for signature
+	License     string // License type
+	FullLicenseText string // full text of license, included in component description
 
 	Impls []Implementation
 }
@@ -699,6 +720,8 @@ func exampleComponent() Component {
 		"http://www.example.com/component/IFName",
 		"Short purpose of IF",
 		"Longer description of IF",
+		"",
+		"",
 		"",
 		make([]Implementation, 0),
 	}
@@ -778,6 +801,7 @@ func (s ImplList) Less(i, j int) bool {
 
 // We process dependency resolution in steps, each step adds some information to the results.
 type DependencyProcessingInfo struct {
+	compon Component
 	implem Implementation
 	installdir string
 	settings []string
@@ -797,6 +821,7 @@ func printDepProcInfo(ri DependencyProcessingInfo) {
 type InstallInfo struct {
 	url string
 	key string
+	license string
 	installdir string
 }
 
@@ -882,12 +907,14 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency) (bool, []
 			var newd DependencyProcessingInfo
 			if len(thisdep) > 0 {
 				newd = DependencyProcessingInfo{
+					aif,
 					impl,
 					location,
 					thisdep[0].Environment, 			// this is important, here happens dep. injections, we transfer dep env to settings
 				} 
 			} else {
 				newd = DependencyProcessingInfo{
+					aif,
 					impl,
 					location,
 					impl.Environment,
@@ -920,7 +947,7 @@ func enrichDepProcInfoWithInstallDir(db AliasDB, depi []DependencyProcessingInfo
 
 			fname, isCached := checkUrlIsCached(el.implem.Location)
 			if !isCached {
-				ilist = append(ilist, InstallInfo{el.implem.Location, el.implem.SigningKey, fname})
+				ilist = append(ilist, InstallInfo{el.implem.Location, el.implem.SigningKey, el.compon.License, fname})
 			}
 
 			// enrich output with directory name
@@ -932,19 +959,23 @@ func enrichDepProcInfoWithInstallDir(db AliasDB, depi []DependencyProcessingInfo
 	return rlist, ilist
 }
 
-func installDownloads(infos []InstallInfo) {
+func installDownloads(infos []InstallInfo, unsafe bool) {
 	// ask user if downloads can be accepted
 	if len(infos) == 0 {return}
+	inline := "unsafe"
 
-	println("the following files will be downloaded and installed (url - signed by):")
-	for _, ii := range infos {
-		println(" ", ii.url, " - ", ii.key)
+	if !unsafe {
+		println("the following files will be downloaded and installed:")
+		for _, ii := range infos {
+			println("file: ", ii.url, "\n signing key: ", ii.key, "\n license: ", ii.license, "\n")
+		}
+		print("more license info can be obtained buy using the \"aio license\" cmd\nplease confirm download with \"yes\": ")
+		reader := bufio.NewScanner(os.Stdin)
+		reader.Scan()
+		inline = reader.Text()
 	}
-	print("\nplease confirm download with \"yes\": ")
-	reader := bufio.NewScanner(os.Stdin)
-	reader.Scan()
-	inline := reader.Text()
-	if inline == "yes" {
+
+	if unsafe || inline == "yes" {
 		for _, el := range infos {
 			// download and install procedure
 			url := el.url
@@ -1082,8 +1113,6 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	cmd.Run()
 }
 
-// aio run <name | url>, cmd = <name | url>
-
 func showComponentInfo(cmd string, db AliasDB) {
 	// url is either given or taken from alias database
 	url := cmd
@@ -1092,16 +1121,48 @@ func showComponentInfo(cmd string, db AliasDB) {
 		url = val
 	}
 
-	aif, _ := getComponentFromUrl(db, url);
+	aif, _ := getComponentFromUrl(db, url)
 
-	println("Component Info on:", aif.Id, "\n");
-	println("Purpose:");
-	println(aif.Purpose, "\n");
-	println("Description:");
-	println(aif.Description);
+	println("Component Info on:", aif.Id, "\n")
+	println("Purpose:")
+	println(aif.Purpose, "\n")
+	println("Description:")
+	println(aif.Description, "\n")
+	println("License:")
+	println(aif.License, "\n")
 }
 
-func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool) {
+func showLicenseInfo(cmd string, db AliasDB) {
+
+	// url is either given or taken from alias database
+	url := cmd
+	// check, do we have an alias for command
+	if val, ok := db.Commands[cmd]; ok {
+		url = val
+	}
+
+	// resolve dependencies
+	ok, rlist := resolveDependencies(db, url, []Dependency{})
+	if !ok {
+		log.Fatal("Could not resolve dependencies for license info on:", url)
+	}
+
+	aif, _ := getComponentFromUrl(db, url)
+
+	println("License info on component:", aif.Id)
+	println("(including licenses of all subcomponents)\n")
+
+	for _, ri := range rlist {
+		println("LICENSE FOR COMPONENT:", ri.compon.Id)
+		println("----------------------")
+		println("----------------------")
+		println(ri.compon.FullLicenseText, "\n")
+	}
+}
+
+// aio run <name | url>, cmd = <name | url>
+
+func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool, unsafe bool) {
 
 	// url is either given or taken from alias database
 	url := cmd
@@ -1120,14 +1181,8 @@ func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args [
 	rlist2, ilist := enrichDepProcInfoWithInstallDir(db, rlist)
 
 	// install files
-	installDownloads(ilist)
+	installDownloads(ilist, unsafe)
 
-/*
-	println("final processed list for cmd: ", url)
-	for _, el := range rlist2 {
-		printDepProcInfo(el)
-	}
-*/
 	if debug {
 		for _, el := range rlist2 {
 			printDepProcInfo(el)
