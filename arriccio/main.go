@@ -943,7 +943,7 @@ func enrichDepProcInfoWithInstallDir(db AliasDB, depi []DependencyProcessingInfo
 		locdir := el.installdir
 		if locdir != "" { 
 			rlist = append(rlist, el)
-		} else {
+		} else if len(el.implem.Location) > 0 {
 
 			fname, isCached := checkUrlIsCached(el.implem.Location)
 			if !isCached {
@@ -969,7 +969,7 @@ func installDownloads(infos []InstallInfo, unsafe bool) {
 		for _, ii := range infos {
 			println("file: ", ii.url, "\n signing key: ", ii.key, "\n license: ", ii.license, "\n")
 		}
-		print("more license info can be obtained buy using the \"aio license\" cmd\nplease confirm download with \"yes\": ")
+		print("more license info can be obtained by using the \"aio license\" cmd\nplease confirm download with \"yes\": ")
 		reader := bufio.NewScanner(os.Stdin)
 		reader.Scan()
 		inline = reader.Text()
@@ -983,13 +983,15 @@ func installDownloads(infos []InstallInfo, unsafe bool) {
 
 			// check key is https - important for security !!!
 			if len(key) < 9 || key[0:8] != "https://" {
-				log.Fatal("key file has to be downloaded over https, not http: ", key)
+				log.Fatal("key file not provided or not to be downloaded over https: ", key)
 			}
 
+			print("downloading: ", url)
 			// download data file, signature and key
 			fname := getUrlAsCachedFile(url)
 			fsig :=  getUrlAsCachedFile(url + ".sig")
 			fkey :=   getUrlAsCachedFile(key)
+			println(" - done")
 
 			// check signature
 			if (verifyFile(fname, fsig, fkey)) {
