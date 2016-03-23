@@ -170,6 +170,12 @@ def task_sinopia():
 
 def task_arriccio():
 	os.environ['GOPATH'] = os.path.abspath('../go-home')
+	if platform.system() == "Windows":
+		copy_target = os.environ['APPDATA'] + '/local/bin/aio.exe'
+	else:
+		copy_target = '~/.local/bin/aio'
+
+
 	yield {
 		'name': 'golibs',
 		'actions': [
@@ -189,8 +195,9 @@ def task_arriccio():
 
 	yield {
 		'name': 'compile',
-	    'actions': ['cd arriccio && go build -o aio main.go && cp aio ~/.local/bin/aio'],
-		'targets' : ['arriccio/aio',
+	    'actions': ['cd arriccio && go build -o aio main.go && cp aio ' + copy_target],  # -ldflags -H=windowsgui 
+		'targets' : [copy_target,
+					 'arriccio/aio'
 		],
 	    'file_dep': [
 			'arriccio/main.go',

@@ -383,14 +383,15 @@ func main() {
 		println("  aio sign <file> <private key>    - create signature for file with private key")
 		println("  aio verify <file> <public key>   - verify if signature is correct")
 		println("")
-		println("  aio debug <name> | <url> [args]  - process a target url and print resulting command witout executing")
+		println("  aio deps <name> | <url>          - prints dependencies")
 		println("  aio unsafe <name> | <url> [args] - process a target url without asking for confirmation")
 		println("  aio version                      - displays version information")
 		println("")
 		println("  aio info <name> | <url>          - prints information about a component")
 		println("  aio license <name> | <url>       - prints detailed license information about a component")
 		println("")
-		println("  aio <name> | <url> [args]        - executes a target component with optional args")
+		println("  aio start <name> | <url> [args]  - executes a target component - no console")
+		println("  aio <name> | <url> [args]        - executes a target component - with console i/o")
 		println("")
 	} else {
 
@@ -491,10 +492,10 @@ func main() {
 			}
 
 		// aio debug <name | url>
-		case "debug":
+		case "deps":
 			{
-				if len(os.Args) >= 3 {
-					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true, false)
+				if len(os.Args) == 3 {
+					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true, false, true)
 				}
 			}
 
@@ -502,7 +503,7 @@ func main() {
 		case "unsafe":
 			{
 				if len(os.Args) >= 3 {
-					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, true)
+					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, true, true)
 				}
 			}
 
@@ -522,11 +523,18 @@ func main() {
 				}
 			}
 
+		// aio start <name | url>
+		case "start":
+			if len(os.Args) >= 3 {
+				httpClient = createClient()
+				runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, false, false)
+			}
+
 		// aio <name | url>
 		default:
 			if len(os.Args) >= 2 {
 				httpClient = createClient()
-				runComponentWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false, false)
+				runComponentWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false, false, true)
 			}
 
 		}
@@ -1079,7 +1087,7 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 	return out
 }
 
-func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []string) {
+func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []string, console bool) {
 	// path handling: path of command will be added at the end of PATH
 	// other env: will be added or set, depending on previous setting
 
@@ -1110,9 +1118,14 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	// run command
 	cmd := exec.Command(binary, arglist...)
 	cmd.Env = env
-    cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
-	cmd.Run()
+
+	if console {
+	    cmd.Stdout = os.Stdout
+	    cmd.Stderr = os.Stderr
+		cmd.Run()
+	} else {
+		cmd.Start()
+	}
 }
 
 func showComponentInfo(cmd string, db AliasDB) {
@@ -1164,7 +1177,7 @@ func showLicenseInfo(cmd string, db AliasDB) {
 
 // aio run <name | url>, cmd = <name | url>
 
-func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool, unsafe bool) {
+func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool, unsafe bool, console bool) {
 
 	// url is either given or taken from alias database
 	url := cmd
@@ -1191,6 +1204,6 @@ func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args [
 		}
 	} else {
 		// build run command and start it
-		composeEnvironmentAndRunCommand(rlist2, args)
+		composeEnvironmentAndRunCommand(rlist2, args, console)
 	}
 }
