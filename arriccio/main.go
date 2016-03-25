@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"runtime"
 	"path/filepath"
-
+	"syscall"
 	"sort"
 	"strings"
 	"strconv"
@@ -1122,8 +1122,11 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	if console {
 	    cmd.Stdout = os.Stdout
 	    cmd.Stderr = os.Stderr
+	    cmd.Stdin = os.Stdin
 		cmd.Run()
 	} else {
+//		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: false}
 		cmd.Start()
 	}
 }

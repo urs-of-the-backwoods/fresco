@@ -39,7 +39,7 @@ def get_arch():
 
 
 version_intonaco = "0.1.0"
-version_haskell_fresco = "0.1.0"
+version_haskell_fresco = "0.1.1"
 
 
 arch_os = get_arch() + "-" + get_os()
