@@ -1,15 +1,9 @@
-build-intonaco
-build-tests
+build-*
+*/.stack-work
 intonaco/target
 intonaco/Cargo.lock
-sinopia/.stack-work
-haskell/.stack-work
 haskell/fresco-binding.cabal
 arriccio/aio
-test_hg3d/output
-test_hg3d/cube-rust/target
-test_hg3d/cube-rust/Cargo.lock
-build-haskell
 .directory
 .doit.db
 *.pyc
