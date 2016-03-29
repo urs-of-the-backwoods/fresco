@@ -1142,7 +1142,7 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 		cmd.Run()
 	} else {
 //		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: false}
+//		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: false}
 		cmd.Start()
 	}
 }
