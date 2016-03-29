@@ -1096,19 +1096,35 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	binary := ""
 	arglist := args
 
-	for _, el := range depi {
-		// add environment
+	for i := len(depi)-1; i >= 0; i-- {  // reversed loop, to start with lowest dependency
+		el := depi[i]
+
 		env = evaluateEnvSetting(env, el.settings, el.installdir)
-		// command handling
+
+		// command handling, binary will include all commands separated by space to allow command chaining
 		if len(el.implem.Command) != 0 {
 			bparts := strings.Fields(el.implem.Command)
-			binary = el.installdir + string(os.PathSeparator) + bparts[0]  // append installdir to command
-			arglist = append(bparts[1:], arglist...)
-			// add local path to environment
-//			env = evaluateEnvSetting(env, []string{"add-path PATH ."}, el.installdir)
+			newcmd := el.installdir + string(os.PathSeparator) + bparts[0]  // append installdir to command
+
+			if len(binary) != 0 {	// if there is already a command, push this one to arglist
+				a := make([]string, 1)
+				a[0] = newcmd
+				arglist = append(a, arglist...)
+			} else {
+				binary = newcmd
+				arglist = append(bparts[1:], arglist...)
+			}
 		}
 	}	
 
+/*
+	print(binary)
+	for _,a := range arglist {
+		print(" ", a)
+	}
+	println()
+*/
+	
 	// if binary still empty, take first argument as binary
 	if binary == "" && len(arglist) > 0 {
 		binary = arglist[0] 
