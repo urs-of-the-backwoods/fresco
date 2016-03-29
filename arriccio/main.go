@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"runtime"
 	"path/filepath"
-	"syscall"
 	"sort"
 	"strings"
 	"strconv"
