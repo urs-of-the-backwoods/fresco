@@ -49,6 +49,13 @@ import (
 )
 
 //
+// version
+//
+
+var version_aio = "0.1.1"
+
+
+//
 // General helper routines
 //
 
@@ -389,6 +396,7 @@ func main() {
 		println("  aio info <name> | <url>          - prints information about a component")
 		println("  aio license <name> | <url>       - prints detailed license information about a component")
 		println("")
+		println("  aio update <name> | <url> [args] - updates a target component - re-read url from internet")
 		println("  aio start <name> | <url> [args]  - executes a target component - no console")
 		println("  aio <name> | <url> [args]        - executes a target component - with console i/o")
 		println("")
@@ -400,7 +408,7 @@ func main() {
 
 		case "version":
 			{
-				println("aio version 0.1.0 running on", runtime.GOARCH + "-" + runtime.GOOS);
+				println("aio version " + version_aio + " running on", runtime.GOARCH + "-" + runtime.GOOS);
 			}
 		// aio alias <name> <url>
 		// aio remove-alias <name>
@@ -494,7 +502,7 @@ func main() {
 		case "deps":
 			{
 				if len(os.Args) == 3 {
-					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true, false, true)
+					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true, false, true, false)
 				}
 			}
 
@@ -502,7 +510,7 @@ func main() {
 		case "unsafe":
 			{
 				if len(os.Args) >= 3 {
-					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, true, true)
+					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, true, true, false)
 				}
 			}
 
@@ -526,14 +534,21 @@ func main() {
 		case "start":
 			if len(os.Args) >= 3 {
 				httpClient = createClient()
-				runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, false, false)
+				runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, false, false, false)
+			}
+
+		// aio start <name | url>
+		case "update":
+			if len(os.Args) == 3 {
+				httpClient = createClient()
+				runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, false, false, true)
 			}
 
 		// aio <name | url>
 		default:
 			if len(os.Args) >= 2 {
 				httpClient = createClient()
-				runComponentWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false, false, true)
+				runComponentWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false, false, true, false)
 			}
 
 		}
@@ -579,10 +594,10 @@ func getImplFName(fname string) string {
 	return iname
 }
 
-func getUrlAsCachedFile(urln string) string {
+func getUrlAsCachedFile(urln string, update bool) string {
 	// check if file is in cache
 	fname, isCached := checkUrlIsCached(urln)
-	if !isCached {
+	if update || !isCached {
 		// download
 		resp, err1 := httpClient.Get(urln)
 		if err1 == nil {
@@ -735,7 +750,7 @@ func exampleComponent() Component {
 	return aif
 }
 
-func getComponentFromUrl(db AliasDB, url string) (Component, string) {
+func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string) {
 	fname := ""
 	ifloc := ""  // component location, directory if locally found
 
@@ -745,7 +760,7 @@ func getComponentFromUrl(db AliasDB, url string) (Component, string) {
 
 	if isUrlValid(url) {
 		// check if local dir overwrite
-		if val, ok := db.Locals[url]; ok {
+		if val, ok := db.Locals[url]; !update && ok {
 			// check valid path
 			abspath, ok := isLocalDirValid(val)
 			if !ok {
@@ -758,7 +773,7 @@ func getComponentFromUrl(db AliasDB, url string) (Component, string) {
 				log.Fatal("Local arriccio file not valid: ", fname)
 			}
 		} else {
-			fname = getUrlAsCachedFile(url)
+			fname = getUrlAsCachedFile(url, update)
 			internet = true
 		}
 		dat, _ = ioutil.ReadFile(fname)
@@ -773,8 +788,8 @@ func getComponentFromUrl(db AliasDB, url string) (Component, string) {
 			log.Fatal("downloaded component description has not correct id!\n   url:", url, "\n   id:", aif.Id)
 		}
 
-		fsig :=  getUrlAsCachedFile(url + ".sig")
-		fkey :=  getUrlAsCachedFile(aif.SigningKey)
+		fsig :=  getUrlAsCachedFile(url + ".sig", update)
+		fkey :=  getUrlAsCachedFile(aif.SigningKey, update)
 
 		// check signature
 		if (!verifyFile(fname, fsig, fkey)) {
@@ -837,7 +852,7 @@ type InstallInfo struct {
 // the needed environment setting, which are used to run the command.
 // The output is a bool stating if the resolution was successful (true) and a list of 
 // gathered processing information for the next step - running the command.
-func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency) (bool, []DependencyProcessingInfo) {
+func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency, update bool) (bool, []DependencyProcessingInfo) {
 
 //	println("resolve Dependencies for: ", cmd)
 
@@ -849,7 +864,7 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency) (bool, []
 		url = val
 	}
 	// load toml file, returns directory, if locally found
-	aif, ifloc := getComponentFromUrl(db, url)
+	aif, ifloc := getComponentFromUrl(db, url, update)
 
 	// resultlist
 	rlist := []DependencyProcessingInfo{}
@@ -879,7 +894,7 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency) (bool, []
 		depsok := true
 		for _, dep := range impl.Dependencies {
 			// get valid impl
-			ok, r := resolveDependencies(db, dep.Id, []Dependency{dep})
+			ok, r := resolveDependencies(db, dep.Id, []Dependency{dep}, update)
 			if ok {
 				for _, el := range r {
 					rdeps = append(rdeps, el)
@@ -972,11 +987,15 @@ func installDownloads(infos []InstallInfo, unsafe bool) {
 	inline := "unsafe"
 
 	if !unsafe {
-		println("the following files will be downloaded and installed:")
+		println("\narriccio is going to download and install the following files:\n" +
+				"--------------------------------------------------------------\n" +
+				"(more license info can be obtained by using the \"aio license\" cmd)\n")
+
 		for _, ii := range infos {
 			println("file: ", ii.url, "\n signing key: ", ii.key, "\n license: ", ii.license, "\n")
 		}
-		print("more license info can be obtained by using the \"aio license\" cmd\nplease confirm download with \"yes\": ")
+
+		print("please confirm download with \"yes\": ")
 		reader := bufio.NewScanner(os.Stdin)
 		reader.Scan()
 		inline = reader.Text()
@@ -995,9 +1014,9 @@ func installDownloads(infos []InstallInfo, unsafe bool) {
 
 			print("downloading: ", url)
 			// download data file, signature and key
-			fname := getUrlAsCachedFile(url)
-			fsig :=  getUrlAsCachedFile(url + ".sig")
-			fkey :=   getUrlAsCachedFile(key)
+			fname := getUrlAsCachedFile(url, false)
+			fsig :=  getUrlAsCachedFile(url + ".sig", false)
+			fkey :=   getUrlAsCachedFile(key, false)
 			println(" - done")
 
 			// check signature
@@ -1154,7 +1173,7 @@ func showComponentInfo(cmd string, db AliasDB) {
 		url = val
 	}
 
-	aif, _ := getComponentFromUrl(db, url)
+	aif, _ := getComponentFromUrl(db, url, false)
 
 	println("Component Info on:", aif.Id, "\n")
 	println("Purpose:")
@@ -1175,12 +1194,12 @@ func showLicenseInfo(cmd string, db AliasDB) {
 	}
 
 	// resolve dependencies
-	ok, rlist := resolveDependencies(db, url, []Dependency{})
+	ok, rlist := resolveDependencies(db, url, []Dependency{}, false)
 	if !ok {
 		log.Fatal("Could not resolve dependencies for license info on:", url)
 	}
 
-	aif, _ := getComponentFromUrl(db, url)
+	aif, _ := getComponentFromUrl(db, url, false)
 
 	println("License info on component:", aif.Id)
 	println("(including licenses of all subcomponents)\n")
@@ -1195,7 +1214,7 @@ func showLicenseInfo(cmd string, db AliasDB) {
 
 // aio run <name | url>, cmd = <name | url>
 
-func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool, unsafe bool, console bool) {
+func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool, unsafe bool, console bool, update bool) {
 
 	// url is either given or taken from alias database
 	url := cmd
@@ -1205,7 +1224,7 @@ func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args [
 	}
 
 	// resolve dependencies
-	ok, rlist := resolveDependencies(db, url, []Dependency{})
+	ok, rlist := resolveDependencies(db, url, []Dependency{}, update)
 	if !ok {
 		log.Fatal("Could not resolve dependencies for cmd: ", url)
 	}
