@@ -38,7 +38,7 @@ def get_arch():
 	os.exit()
 
 
-version_intonaco = "0.1.0"
+version_intonaco = "0.1.1"
 version_haskell_fresco = "0.1.1"
 
 
