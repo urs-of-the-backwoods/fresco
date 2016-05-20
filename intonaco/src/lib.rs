@@ -31,6 +31,7 @@ use std::io::{Cursor, Seek, SeekFrom, Read};
 use std::io::copy;
 use std::result;
 use std::error;
+use std::process::{exit};
 
 
 use rustc_serialize::Encodable;
@@ -396,7 +397,14 @@ lazy_static! {
                                 let queue = Arc::new(MsQueue::new());
                                 {
                                     let queue1 = queue.clone();
-                                    thread::spawn(move || { object_lib_system_loop(libf, queue1); });             
+                                    // double thread, if childthread is being destroyed, program terminates
+                                    thread::spawn(move || { 
+	                                    let child = thread::spawn(move || { 
+        	                            	object_lib_system_loop(libf, queue1); 
+    	                                });             
+    	                                child.join();
+    	                                exit(-10);
+	                                });             
                                 }
                                 v.push(queue);
                             }
