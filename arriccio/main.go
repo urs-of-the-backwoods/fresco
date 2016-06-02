@@ -70,11 +70,20 @@ func createClient() *http.Client {
 // global client
 var httpClient *http.Client
 
-// isUrlValid checks if url is a valid one
+// isUrlValid checks if url is a valid one, only check http:
 func isUrlValid(url string) bool {
-	return govalidator.IsURL(url)
+	return len(url) >= 5 && url[:5] == "http:" && govalidator.IsURL(url)
 }
 
+func checkNameUrl(cmd string, db AliasDB) {
+	if isUrlValid(cmd) {
+		return 
+	}
+	if _, ok := db.Commands[cmd]; ok {
+		return 
+	}
+	log.Fatal("need <url> or <name> not: ", cmd)
+}
 // isLocalDirValid checks if the path is pointing to a directory.
 // It returns the absolute path to that dir and a success indicator (bool).
 func isLocalDirValid(dir string) (string, bool) {
@@ -420,8 +429,10 @@ func main() {
 						db.Commands[os.Args[2]] = url
 						writeAliasDB(db)
 					} else {
-						println("url: ", url, " is not valid!")
+						log.Fatal("url: ", url, " is not valid!")
 					}
+				} else {
+					log.Fatal("alias needs two parameters: aio alias <name> <url>")
 				}
 			}
 		case "remove-alias":
@@ -429,7 +440,9 @@ func main() {
 				if len(os.Args) == 3 {
 					delete(db.Commands, os.Args[2])
 					writeAliasDB(db)
-				}
+				} else {
+				 log.Fatal("remove-alias needs one parameter: aio remove-alias <name>")
+			    }
 			}
 
 			// aio local <url> local-dir
@@ -444,11 +457,13 @@ func main() {
 							db.Locals[url] = abs
 							writeAliasDB(db)
 						} else {
-							println("dir: ", os.Args[3], " is not valid!")
+							log.Fatal("dir: ", os.Args[3], " is not valid!")
 						}
 					} else {
-						println("url: ", url, " is not valid!")
+						log.Fatal("url: ", url, " is not valid!")
 					}
+				} else {
+					log.Fatal("local needs two parameters: aio local <url> <local-dir>")
 				}
 			}
 		case "remove-local":
@@ -456,6 +471,8 @@ func main() {
 				if len(os.Args) == 3 {
 					delete(db.Locals, os.Args[2])
 					writeAliasDB(db)
+				} else {
+					log.Fatal("remove-local needs one parameter: aio remove-local <url>")
 				}
 			}
 
@@ -472,7 +489,11 @@ func main() {
 						for k, v := range db.Locals {
 							println(k, " - ", v)
 						}
+					default:
+						log.Fatal("list needs either alias or list as parameter")
 					}
+				} else {
+					log.Fatal("list needs one parameter, either aio list alias or aio list local")
 				}
 			}
 
@@ -481,6 +502,8 @@ func main() {
 			{
 				if len(os.Args) == 4 {
 			        signFile(os.Args[2], os.Args[3])
+				} else {
+					log.Fatal("sign needs two parameters, aio sign <file> <private key>")
 				}
 			}
 
@@ -495,14 +518,19 @@ func main() {
 			            println("file is not properly signed, signature does not fit")
 			            os.Exit(-1)
 			        }
+				} else {
+					log.Fatal("verify needs two parameters, aio verify <file> <public key>")
 				}
 			}
 
-		// aio debug <name | url>
+		// aio deps <name | url>
 		case "deps":
 			{
 				if len(os.Args) == 3 {
+					checkNameUrl(os.Args[2], db)
 					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], true, false, true, false)
+				} else {
+					log.Fatal("deps needs one parameter, aio deps <name | url>")
 				}
 			}
 
@@ -510,7 +538,10 @@ func main() {
 		case "unsafe":
 			{
 				if len(os.Args) >= 3 {
+					checkNameUrl(os.Args[2], db)
 					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, true, true, false)
+				} else {
+				log.Fatal("unsafe needs one parameter, aio unsafe <name | url>")
 				}
 			}
 
@@ -518,7 +549,10 @@ func main() {
 			{
 				httpClient = createClient()
 				if len(os.Args) == 3 {
+					checkNameUrl(os.Args[2], db)
 					showComponentInfo(os.Args[2], db);
+				} else {
+					log.Fatal("info needs one parameter, aio info <name | url>")
 				}
 			}
 
@@ -526,29 +560,41 @@ func main() {
 			{
 				httpClient = createClient()
 				if len(os.Args) == 3 {
+					checkNameUrl(os.Args[2], db)
 					showLicenseInfo(os.Args[2], db);
+				} else {
+					log.Fatal("license needs one parameter, aio license <name | url>")
 				}
 			}
 
 		// aio start <name | url>
 		case "start":
 			if len(os.Args) >= 3 {
+				checkNameUrl(os.Args[2], db)
 				httpClient = createClient()
 				runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, false, false, false)
+			} else {
+				log.Fatal("start needs one parameter, aio start <name | url>")
 			}
 
 		// aio start <name | url>
 		case "update":
 			if len(os.Args) == 3 {
+				checkNameUrl(os.Args[2], db)
 				httpClient = createClient()
 				runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, false, false, true)
+			} else {
+				log.Fatal("update needs one parameter, aio update <name | url>")
 			}
 
 		// aio <name | url>
 		default:
 			if len(os.Args) >= 2 {
+				checkNameUrl(os.Args[1], db)
 				httpClient = createClient()
 				runComponentWithDependencies(os.Args[1], db, getArriccioDir(), os.Args[2:], false, false, true, false)
+			} else {
+				log.Fatal("aio needs at least one parameter, aio <name | url>")
 			}
 
 		}
@@ -932,7 +978,7 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency, update bo
 					aif,
 					impl,
 					location,
-					thisdep[0].Environment, 			// this is important, here happens dep. injections, we transfer dep env to settings
+					append(impl.Environment, thisdep[0].Environment...), 			// this is important, here happens dep. injections, we transfer dep env to settings
 				} 
 			} else {
 				newd = DependencyProcessingInfo{
