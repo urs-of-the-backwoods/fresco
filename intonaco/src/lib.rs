@@ -590,7 +590,7 @@ pub extern "C" fn entity_data_read(dp: *mut DataPointer, p_cp: *mut *const libc:
     unsafe {
         let DataPointer(ref av) = *bav;
         *p_len = av.len() as i32;
-        *p_cp = unsafe { (mem::transmute::<&[u8],&[i8]>(&av)).as_ptr() };
+        *p_cp = unsafe { (mem::transmute::<&[u8],&[i8]>(av)).as_ptr() };
     }
     std::mem::forget(bav);
 }

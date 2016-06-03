@@ -52,7 +52,7 @@ import (
 // version
 //
 
-var version_aio = "0.1.1"
+var version_aio = "0.1.2"
 
 
 //

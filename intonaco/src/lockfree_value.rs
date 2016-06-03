@@ -16,6 +16,7 @@
 // A lockfree_value is Send and Sync.
 //
 
+use std::ptr;
 use std::sync::Arc;
 use crossbeam::mem::epoch::{self, Atomic, Owned};
 use std::sync::atomic::Ordering::{Acquire, Release, Relaxed};
@@ -52,6 +53,7 @@ impl<T> Value<T> {
                         Ok(_) => {
                             unsafe {
                                 guard.unlinked(ptr);
+                                let tmp = ptr::read(&(*ptr));  // do not leak memory, run desctructor
                             };
                             return a;
                         },
