@@ -23,6 +23,8 @@ def get_os():
 		return "linux"
 	if os == "Windows":
 		return "windows"
+	if os == "Darwin":
+		return "darwin"
 	print "don't know, which platform this is: ", os
 	os.exit()
 
@@ -54,8 +56,10 @@ def copy_file_replace(file_in, replace_dict, targets):
 		        fout.write(line_out)
 
 def task_intonaco():
-	if platform.system() == "Windows":
+	if get_os() == "windows":
 		intonaco_lib = "intonaco.dll"
+	elif  get_os() == "darwin":
+		intonaco_lib = "libintonaco.dylib"
 	else:
 		intonaco_lib = "libintonaco.so"
 	yield {
