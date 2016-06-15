@@ -5,7 +5,7 @@ services:
 
 before_install:
 - docker pull debian:wheezy
-- docker run -v $HOME/build/urs-of-the-backwoods/fresco:/fresco debian:wheezy bash -c "/fresco/scripts/prepare-debian.sh && /fresco/scripts/arriccio.sh" 
+- docker run -v $HOME/build/urs-of-the-backwoods/fresco:/fresco debian:wheezy bash -c ". /fresco/scripts/prepare-debian.sh && . /fresco/scripts/arriccio.sh" 
 
 script:
 - ls $HOME/build/urs-of-the-backwoods/fresco
