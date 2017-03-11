@@ -24,6 +24,7 @@ typedef uint32_t FrMsgLength;
 typedef uint64_t FrComponentType;   
 typedef FrComponentType FrItemType;
 typedef FrComponentType FrPropertyType;
+typedef FrComponentType FrEventType;
 
 /*
     to get something, we can send a message to, we need a receiving item
@@ -45,6 +46,10 @@ typedef struct {
     FrMessageFn sendFn;
 } FrReceiver;
 
+// callback with entity pointers
+// pub type FrMessageFn2 = extern "C" fn (item: EntityPointer, ct: FrPropertyType, msg: FrMsg, ml: FrMsgLength); 
+typedef void* FrEntity;
+typedef void (FrMessageFn2) (FrEntity e, FrEventType pr, FrMsg m, FrMsgLength l);
 
 /*
     giornata (object lib libraries) interface
@@ -62,7 +67,7 @@ typedef struct {
     FrItem (*gioCreateItem) (FrItemType ct, FrMsg m, FrMsgLength l);
     void (*gioDestroyItem) (FrItemType ct, FrItem it);
     FrMessageFn (*gioGetMsgSender) (FrItemType ob, FrPropertyType pr); 
-    void (*gioRegisterMsgReceiver) (FrItemType ct, FrPropertyType pr, FrItem it, FrItem rcv, FrMessageFn);
+    void (*gioRegisterMsgReceiver) (FrItemType ob, FrEventType ev, FrItem it, FrEntity rcv, FrMessageFn2);
 
 } FrGiornateInterface;
 
