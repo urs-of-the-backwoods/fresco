@@ -67,52 +67,30 @@ typedef struct {
 } FrGiornateInterface;
 
 
-
-
-
-
-//
-// generell Fresco types
-//
-
-typedef int32_t FrError;
-typedef void* FrItem;               // Object Library Item, created in C++ domain specific layer
-typedef void* FrReceiver;           // Msg Receiver 
-typedef void* FrEntity;             // Entity, created in Intoncao, Entity runtime, contains multiple components
-typedef void* FrSystem;             // A specific domain system, handling entites within this domain
-
-typedef char* FrGiornataEnv;        // name of Giornata library environment variable
-
-typedef FrError (*FrMsgFn) (FrMsg m, FrMsgLength l);
-typedef FrError (*FrMsgEntityFn) (FrEntity e, FrComponentType ct, FrMsg m, FrMsgLength l);
-
-typedef FrError (*FrMsgItemFn2) (FrItem it, FrComponentType ct, FrMsg m, FrMsgLength l);
-
-
 //
 // intonaco (entity  component system runtime) interface
 //
 
+typedef void (*FrMessageFn2) (FrEntity e, FrPropertyType ct, FrMsg m, FrMsgLength l);
+
 typedef struct {
 
-    FrError (*inEntityCreate) (FrMsg m, FrMsgLength l, FrEntity *e);                // Msg contains a CBOR array from arrays [u64, bs] 
-    FrError (*inEntityReadComponent) (FrEntity e, FrComponentType ct, FrMsgFn f);               // also names are "Entity", read write works per component
-    FrError (*inEntityWriteComponent) (FrEntity e, FrComponentType ct, FrMsg m, FrMsgLength l);
-    FrError (*inEntityReadId) (FrEntity e, FrMsgFn f);  
-    FrError (*inEntityDestroy) (FrEntity e);
+    void (*inEntityCreate) (FrMsg m, FrMsgLength l, FrEntity *e);                // Msg contains a CBOR array from arrays [u64, bs] 
+    void (*inEntityReadComponent) (FrEntity e, FrComponentType ct, FrMessageFn f);               // also names are "Entity", read write works per component
+    void (*inEntityWriteComponent) (FrEntity e, FrComponentType ct, FrMsg m, FrMsgLength l);
+    void (*inEntityReadId) (FrEntity e, FrItem it, FrMessageFn f);  
+    void (*inEntityDestroy) (FrEntity e);
 
-    FrError (*inObjectLibSystemInit) (FrGiornataEnv g, msgPointer m, msgLength l, FrSystem *ps);       // Msg contains specific system creation parameters
-    FrError (*inObjectLibSystemAddEntity) (FrSystem s, FrEntity e);
-    FrError (*inObjectLibSystemRemoveEntity) (FrSystem s, FrEntity e);
-    FrError (*inObjectLibSystemShutdown) (FrSystem s);
-    FrError (*inObjectLibSystemStep) (FrSystem s);                                    // runs one cycle of system (control over Thread needed)
+    void (*inObjectLibSystemInit) (FrGiornataEnv g, msgPointer m, msgLength l, FrSystem *ps);       // Msg contains specific system creation parameters
+    void (*inObjectLibSystemAddEntity) (FrSystem s, FrEntity e);
+    void (*inObjectLibSystemRemoveEntity) (FrSystem s, FrEntity e);
+    void (*inObjectLibSystemShutdown) (FrSystem s);
+    void (*inObjectLibSystemStep) (FrSystem s);                                    // runs one cycle of system (control over Thread needed)
 
-    FrError (*inCallbackSystemInit) (FrSystem *ps);
-    FrError (*inCallbackSystemRegisterReceiver) (FrSystem s, FrEntity e, FrComponentType ct, FrMsgEntityFn f);  
-    FrError (*inCallbackSystemShutdown) (FrSystem s);
-    FrError (*inCallbackSystemStep) (FrSystem s);
-
-    char* inErrorMessage(FrError);
+    void (*inCallbackSystemInit) (FrSystem *ps);
+    void (*inCallbackSystemRegisterReceiver) (FrSystem s, FrEntity e, FrComponentType ct, FrMessageFn2 f);  
+    void (*inCallbackSystemShutdown) (FrSystem s);
+    void (*inCallbackSystemStep) (FrSystem s);
 
 } FrIntonacoInterface;
 
