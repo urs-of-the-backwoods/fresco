@@ -1,0 +1,60 @@
+--
+--  Fresco Framework for Multi-Language Programming
+--  Copyright 2015-2016 Peter Althainz
+--    
+--  Distributed under the Apache License, Version 2.0
+--  (See attached file LICENSE or copy at 
+--  http:--www.apache.org/licenses/LICENSE-2.0)
+-- 
+--  file: sinopia/fresco-sinopia.cabal
+--
+
+name:                fresco-sinopia
+version:             0.2.0
+synopsis:            Tools for fresco
+description:         Fresco is a framwork for multi-language programming. The sinopia tool parses data definition files.
+homepage:            http://github.com/urs-of-the-backwoods/fresco
+license:             OtherLicense
+license-file:        LICENSE
+author:              Urs of the Backwoods
+maintainer:          uotbw@hgamer3d.og
+copyright:           2015-2017 Peter Althainz
+category:            Web
+build-type:          Simple
+
+-- extra-source-files:
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     Sinopia.Parser, Sinopia.Data, Sinopia.Util, Sinopia.Haskell, Sinopia.Rust
+  hs-source-dirs:      src
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base, attoparsec, text
+  default-language:    Haskell2010
+
+executable sinopia
+  hs-source-dirs:      src
+  main-is:             sinopia.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base, attoparsec, text, fresco-sinopia
+  other-modules:       Sinopia.Data, Sinopia.Parser, Sinopia.Util, Sinopia.Haskell, Sinopia.Rust, Sinopia.C
+  default-language:    Haskell2010
+
+test-suite specs
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base,
+                       here,
+                       attoparsec,
+                       containers,
+                       hspec,
+                       QuickCheck,
+                       fresco-sinopia,
+                       fresco-binding,
+                       either-unwrap,
+                       text,
+                       bytestring,
+                       binary-serialise-cbor
+  other-modules:       ParserSpec, HaskellSpec
+  default-language:    Haskell2010

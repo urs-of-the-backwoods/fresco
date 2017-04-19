@@ -1,0 +1,27 @@
+#
+#  Fresco Framework for Multi-Language Programming
+#  Copyright 2015-2016 Peter Althainz
+#    
+#  Distributed under the Apache License, Version 2.0
+#  (See attached file LICENSE or copy at 
+#  http:#www.apache.org/licenses/LICENSE-2.0)
+# 
+#  file: intonaco/Cargo.toml
+#
+
+[package]
+name = "intonaco"
+version = "2.0.0"
+authors = ["uotbw <info@hgamer3d.org>"]
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+libc = "*"
+cbor-codec = { git = "https://gitlab.com/twittner/cbor-codec.git", version = "0.7" }
+lazy_static = "0.2"
+crossbeam = "0.2"
+snowflake = "1.2"
+libloading = "0.3"
+rustc-serialize = "0.3"
