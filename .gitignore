@@ -1,9 +1,3 @@
-build-*
-*/.stack-work
-intonaco/target
-intonaco/Cargo.lock
-haskell/fresco-binding.cabal
-arriccio/aio
-.directory
-.doit.db
-*.pyc
+intonaco/intonaco/package
+intonaco/intonaco/target
+intonaco/intonaco/Cargo.lock

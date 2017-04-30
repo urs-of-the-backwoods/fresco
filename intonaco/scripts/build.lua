@@ -1,12 +1,16 @@
+local glue = require("glue")
+glue.luapath(glue.bin .. "/../../lualib")
+
 require("os_arch")
 require("util")
+require("lfs")
 
 local function getVersion()
 	local p = debug.getinfo(1).source:gsub('\\', '/'):match("@?(.*/)")
 	if p then
-		io.input(p.."../intonaco/Cargo.toml")
+		io.input(p.."../Cargo.toml")
 	else
-		io.input("../intonaco/Cargo.toml")
+		io.input("../Cargo.toml")
 	end
 	while true do
 		local line = io.read()
@@ -24,29 +28,31 @@ local var version = getVersion()
 
 local function runBuild()
 	-- build executable
-	os.execute("cd intonaco && cargo build")
+	os.execute("cargo build")
 end
 
 local function runPackage()
 	-- clean output directory
-	os.execute("rm -rf intonaco/package")
+	os.execute("rm -rf package")
 	-- create directory 
 	local dir = getPlatString("intonaco", version)
-	os.execute("mkdir intonaco/package")
-	os.execute("mkdir intonaco/package/" .. dir)
+	lfs.mkdir("package")
+	lfs.mkdir("package/" .. dir)
+	-- os.execute("mkdir intonaco/package")
+	-- os.execute("mkdir intonaco/package/" .. dir)
 
 	-- copy toml file
-	os.execute("cp intonaco/arriccio.toml intonaco/package/arriccio.toml")
+	os.execute("cp arriccio.toml package/arriccio.toml")
 
 	-- copy executable
-	local fs = assert(io.popen("ls intonaco/target/debug"), "ls not working on your system")
+	local fs = assert(io.popen("ls target/debug"), "ls not working on your system")
 	local s = nil
 	while true do
 		s = fs:read()
 		if s then
 			local m = s:match("intonaco")
 			if m then
-				os.execute("cp intonaco/target/debug/" .. s .. " intonaco/package/" .. dir .. "/intonaco.gio")
+				os.execute("cp target/debug/" .. s .. " package/" .. dir .. "/intonaco.gio")
 				break
 			end
 		else
@@ -79,8 +85,11 @@ if #arg > 0 then
 	elseif arg[1] == "version" then
 		io.write(version)
 		os.exit(0)
+	elseif arg[1] == "platform" then
+		io.write(getPlatString("", version))
+		os.exit(0)
 	elseif arg[1] == "register" then
-		os.execute("aio local http://www.hgamer3d.org/component/Intonaco intonaco/package")
+		os.execute("aio local http://www.hgamer3d.org/component/Intonaco package")
 		os.exit(0)
 	elseif arg[1] == "unregister" then
 		os.execute("aio remove-local http://www.hgamer3d.org/component/Intonaco")

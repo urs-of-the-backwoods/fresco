@@ -7,24 +7,18 @@
 function getOS()
 	local raw_os_name, raw_arch_name = '', ''
 
-	-- LuaJIT shortcut
-	if jit and jit.os and jit.arch then
-		raw_os_name = jit.os
-		raw_arch_name = jit.arch
-	else
-		local isWin = string.sub(os.tmpname(), 1, 1) == '\\'
-		if isWin then
-			-- Windows
-			local env_OS = os.getenv('OS')
-			local env_ARCH = os.getenv('PROCESSOR_ARCHITECTURE')
-			if env_OS and env_ARCH then
-				raw_os_name, raw_arch_name = env_OS, env_ARCH
-			end
-		else
-			-- Unix-based OS
-			raw_os_name = io.popen('uname -s','r'):read('*l')
-			raw_arch_name = io.popen('uname -m','r'):read('*l')
+	local isWin = string.sub(os.tmpname(), 1, 1) == '\\'
+	if isWin then
+		-- Windows
+		local env_OS = os.getenv('OS')
+		local env_ARCH = os.getenv('PROCESSOR_ARCHITECTURE')
+		if env_OS and env_ARCH then
+			raw_os_name, raw_arch_name = env_OS, env_ARCH
 		end
+	else
+		-- Unix-based OS
+		raw_os_name = io.popen('uname -s','r'):read('*l')
+		raw_arch_name = io.popen('uname -m','r'):read('*l')
 	end
 
 	raw_os_name = (raw_os_name):lower()
