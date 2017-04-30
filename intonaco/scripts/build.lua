@@ -89,10 +89,10 @@ if #arg > 0 then
 		io.write(getPlatString("", version))
 		os.exit(0)
 	elseif arg[1] == "register" then
-		os.execute("aio local http://www.hgamer3d.org/component/Intonaco package")
+		os.execute("scripts" .. pathSep() .. "aio local http://www.hgamer3d.org/component/Intonaco package")
 		os.exit(0)
 	elseif arg[1] == "unregister" then
-		os.execute("aio remove-local http://www.hgamer3d.org/component/Intonaco")
+		os.execute("scripts" .. pathSep() .. "aio remove-local http://www.hgamer3d.org/component/Intonaco")
 		os.exit(0)
 	end
 	print("wrong argument to build script:", arg[1])

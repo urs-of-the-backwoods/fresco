@@ -1,3 +1,2 @@
 @ECHO OFF
-set LUA_PATH=../lualib/?.lua
-scripts\aio.exe http://www.hgamer3d.org/component/Lua scripts\build.lua %1 %2 %3 %4 %5 %6
+scripts\aio.exe http://www.hgamer3d.org/component/Lua2 scripts\build.lua %1 %2 %3 %4 %5 %6

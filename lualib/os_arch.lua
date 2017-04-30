@@ -68,3 +68,13 @@ function getPlatString(name, version)
 	return (name .. '-' .. a .. '-' .. o .. '-' .. version)
 end
 
+function pathSep()
+	o, a = getOS()
+	if o == "windows" then
+		return '\\'
+	else 
+		return '/'
+	end
+end
+
+
