@@ -28,9 +28,7 @@ import (
 	"fmt"
 	"runtime"
 	"path/filepath"
-	"sort"
 	"strings"
-	"strconv"
 	"encoding/hex"
     "encoding/base64"
 
@@ -52,8 +50,12 @@ import (
 // version
 //
 
-var version_aio = "0.1.3"
+var version_aio = "0.2.0"
 
+// version remarks
+// 0.2.0
+//	  removed all version checks, simplified config file
+//	  one ssh key for all downloads of one package
 
 //
 // General helper routines
@@ -117,78 +119,6 @@ func matchArchAndOs(arch string, os string) bool {
 //	println("match arch, target: ", arch, " runtime: ", runtime.GOARCH)
 	return (arch == "*" || arch == runtime.GOARCH) && 
 		   (os == "*" || os == runtime.GOOS)
-}
-
-// isVersionValid, checks if a version string is a valid one.
-// Criteria are if there are only numbers, separated by points.
-func isVersionValid(v string) bool {
-	vs := strings.Split(v, ".")
-	if len(vs) == 0 {return false}
-	for _, n := range vs {
-		if _, err := strconv.Atoi(n); err != nil {
-			return false
-		}
-	}
-	return true
-}
-
-// compareVersion, checks if b is larger then a.
-// Output is >0 if b is larger, <0 if less, ==0 if equal.
-func compareVersion(a, b string) (ret int) {
-	as := strings.Split(a, ".")
-	bs := strings.Split(b, ".")
-	loopMax := len(bs)
-	if len(as) > len(bs) {
-		loopMax = len(as)
-	}
-	for i := 0; i < loopMax; i++ {
-		var x, y string
-		if len(as) > i {
-			x = as[i]
-		}
-		if len(bs) > i {
-			y = bs[i]
-		}
-		xi, _ := strconv.Atoi(x)
-		yi, _ := strconv.Atoi(y)
-		if xi > yi {
-			ret = -1
-		} else if xi < yi {
-			ret = 1
-		}
-		if ret != 0 {
-			break
-		}
-	}
-	return
-}
-
-
-// checkVersionAgainstConstraint matches if major version is the same AND one of the following conditions are true:
-//    - version string only contains major version number and minor version then the version needs be greater then constraint
-//    - version string includes patch version number, then versions needs to be identical, up to the given version detail
-func checkVersionAgainstConstraint(version string, constraint string) bool {
-
-	// first check version and constraint for being correct
-	if !isVersionValid(version) {
-		log.Fatal("version string not valid: ", version)
-	} 
-	if !isVersionValid(constraint) {
-		log.Fatal("version string not valid: ", constraint)
-	} 
-
-	// split versions, major number needs to be the same
-	vs := strings.Split(version, ".")
-	cs := strings.Split(constraint, ".")
-	if vs[0] != cs[0] {return false}
-
-	// case of normal constraint, version needs to be larger or equal then constraint
-	if len(cs) <= 2 {
-		return compareVersion(constraint, version) >= 0
-	}
-
-	// else versions needs to be identical
-	return constraint == version
 }
 
 // extractTarGzFile extracts a gzipped tar file into output directory.
@@ -615,7 +545,7 @@ func getArriccioDir() string {
 	return arrdir
 }
 
-//		fname, isCached := checkUrlIsChached(el.implem.Location)
+//		fname, isCached := checkUrlIsChached(el.impl.Location)
 
 func checkUrlIsCached(url string) (string, bool) {
 	// check if file is in cache
@@ -731,19 +661,15 @@ type Component struct {
 	License     string // License type
 	FullLicenseText string // full text of license, included in component description
 
-	Impls []Implementation
+	Implementation []ComponentImpl
 }
 
-// Implementation describes the properties of an implementation of a component.
+// ComponentImpl describes the properties of an implementation of a component.
 // In addition to metadata it also contains the components, it depends on, the dependencies.
-type Implementation struct {
-	Version      string
+type ComponentImpl struct {
 	Architecture string
 	OS           string
-
 	Location     string // download Url tgz
-	SigningKey	 string // https location of public key for signature
-
 	Command      string
 	Environment  []string
 	Dependencies []Dependency
@@ -753,7 +679,6 @@ type Implementation struct {
 // There is a version constraint, which says which range of versions is acceptable for the implementation.
 type Dependency struct {
 	Id                string
-	VersionConstraint string
 	Environment       []string
 }
 
@@ -761,7 +686,7 @@ type Dependency struct {
 
 func readComponent(dat string) Component {
 	var db Component
-	_, err := toml.Decode(string(dat), &db)
+	_, err := toml.Decode(dat, &db)
 	if err != nil {
 		log.Fatal("cannot read component ", err)
 	}
@@ -783,11 +708,11 @@ func exampleComponent() Component {
 	aif := Component{
 		"http://www.example.com/component/IFName",
 		"Short purpose of IF",
+		"",
 		"Longer description of IF",
 		"",
 		"",
-		"",
-		make([]Implementation, 0),
+		make([]ComponentImpl, 0),
 	}
 	return aif
 }
@@ -842,22 +767,6 @@ func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string
 	return aif, ifloc
 }
 
-//
-// sort implementations
-//
-
-type ImplList []Implementation
-
-func (s ImplList) Len() int {
-	return len(s)
-}
-func (s ImplList) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s ImplList) Less(i, j int) bool {
-	return compareVersion(s[i].Version, s[j].Version) < 0
-}
-
 
 //
 // Processing Components, running commands with dependency injection
@@ -865,15 +774,15 @@ func (s ImplList) Less(i, j int) bool {
 
 // We process dependency resolution in steps, each step adds some information to the results.
 type DependencyProcessingInfo struct {
-	compon Component
-	implem Implementation
+	comp Component
+	impl ComponentImpl
 	installdir string
 	settings []string
 }
 
 func printDepProcInfo(ri DependencyProcessingInfo) {
-	println("command: ", ri.implem.Command)
-	println("location: ", ri.implem.Location)
+	println("command: ", ri.impl.Command)
+	println("location: ", ri.impl.Location)
 	println("installdir: ", ri.installdir)
 	println("settings: ")
 	for _, s := range ri.settings {
@@ -912,20 +821,12 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency, update bo
 	rlist := []DependencyProcessingInfo{}
 
 	// build list of impl, sorted by version
-	ilist := []Implementation{}
-	for _, impl := range aif.Impls {
-		// two cases, thisdep is empty list or thisdep contains constraints
-		if (len(thisdep) == 0) {
-			if matchArchAndOs(impl.Architecture, impl.OS) {
-				ilist = append(ilist, impl)
-			}
-		} else {
-			if matchArchAndOs(impl.Architecture, impl.OS) && checkVersionAgainstConstraint(impl.Version, thisdep[0].VersionConstraint) {
-				ilist = append(ilist, impl)
-			}
+	ilist := []ComponentImpl{}
+	for _, impl := range aif.Implementation {
+		if matchArchAndOs(impl.Architecture, impl.OS) {
+			ilist = append(ilist, impl)
 		}
 	}
-	sort.Sort(ImplList(ilist))
 
 	// go through implementations
 	implok := false
@@ -1007,11 +908,11 @@ func enrichDepProcInfoWithInstallDir(db AliasDB, depi []DependencyProcessingInfo
 		locdir := el.installdir
 		if locdir != "" { 
 			rlist = append(rlist, el)
-		} else if len(el.implem.Location) > 0 {
+		} else if len(el.impl.Location) > 0 {
 
-			fname, isCached := checkUrlIsCached(el.implem.Location)
+			fname, isCached := checkUrlIsCached(el.impl.Location)
 			if !isCached {
-				ilist = append(ilist, InstallInfo{el.implem.Location, el.implem.SigningKey, el.compon.License, fname})
+				ilist = append(ilist, InstallInfo{el.impl.Location, el.comp.SigningKey, el.comp.License, fname})
 			}
 
 			// enrich output with directory name
@@ -1162,8 +1063,8 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 		env = evaluateEnvSetting(env, el.settings, el.installdir)
 
 		// command handling, binary will include all commands separated by space to allow command chaining
-		if len(el.implem.Command) != 0 {
-			bparts := strings.Fields(el.implem.Command)
+		if len(el.impl.Command) != 0 {
+			bparts := strings.Fields(el.impl.Command)
 			newcmd := el.installdir + string(os.PathSeparator) + bparts[0]  // append installdir to command
 
 			if len(binary) != 0 {	// if there is already a command, push this one to arglist
@@ -1217,6 +1118,8 @@ func showComponentInfo(cmd string, db AliasDB) {
 
 	aif, _ := getComponentFromUrl(db, url, false)
 
+	fmt.Printf("%+v", aif)
+
 	println("Component Info on:", aif.Id, "\n")
 	println("Purpose:")
 	println(aif.Purpose, "\n")
@@ -1247,10 +1150,10 @@ func showLicenseInfo(cmd string, db AliasDB) {
 	println("(including licenses of all subcomponents)\n")
 
 	for _, ri := range rlist {
-		println("LICENSE FOR COMPONENT:", ri.compon.Id)
+		println("LICENSE FOR COMPONENT:", ri.comp.Id)
 		println("----------------------")
 		println("----------------------")
-		println(ri.compon.FullLicenseText, "\n")
+		println(ri.comp.FullLicenseText, "\n")
 	}
 }
 
