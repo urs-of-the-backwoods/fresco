@@ -566,7 +566,7 @@ func getImplFName(fname string) string {
 	return iname
 }
 
-func getUrlAsCachedFile(urln string, update bool) string {
+func getUrlAsCachedFile(urln string, update bool) (string, bool) {
 	// check if file is in cache
 	fname, isCached := checkUrlIsCached(urln)
 	if update || !isCached {
@@ -593,9 +593,48 @@ func getUrlAsCachedFile(urln string, update bool) string {
 //		println("take file from cache: ", fname)
 	}
 	abs, _ := filepath.Abs(fname)
-	return abs
+	return abs, isCached
 }
 
+func getRemoteComponent(urln string, update bool) (string, Component) {
+	fname, isCached := getUrlAsCachedFile(urln, update)
+	dat, _ := ioutil.ReadFile(fname)
+	aif := readComponent(string(dat))
+	if !isCached {
+		// check url is consistent with id
+		if urln != aif.Id {
+			os.Remove(fname)
+			log.Fatal("downloaded component description has not correct id!\n   url:", urln, "\n   id:", aif.Id)
+		}
+		// check key is https - important for security !!!
+		if len(aif.SigningKey) < 9 || aif.SigningKey[0:8] != "https://" {
+			log.Fatal("key file not provided or not to be downloaded over https: ", aif.SigningKey)
+		}
+		// verify signature
+		fsig, _ :=  getUrlAsCachedFile(urln + ".sig", update)
+		fkey, _ :=  getUrlAsCachedFile(aif.SigningKey, update)
+		if (!verifyFile(fname, fsig, fkey)) {
+			os.Remove(fname)
+			os.Remove(fsig)
+			log.Fatal("downloaded component description not correctly signed: ", urln)
+		}
+	}
+	return fname, aif
+}
+
+func getRemoteFile(urln string, urlkey string, update bool) string {
+	fname, isCached := getUrlAsCachedFile(urln, update)
+	if !isCached {
+		fsig, _ :=  getUrlAsCachedFile(urln + ".sig", update)
+		fkey, _ :=  getUrlAsCachedFile(urlkey, update)
+		if (!verifyFile(fname, fsig, fkey)) {
+			os.Remove(fname)
+			os.Remove(fsig)
+			log.Fatal("downloaded component description not correctly signed: ", urln)
+		}
+	}
+	return fname
+}
 
 //
 // Database of command aliases and local substitute aliases
@@ -704,29 +743,17 @@ func writeComponent(db Component, fname string) {
 	}
 }
 
-func exampleComponent() Component {
-	aif := Component{
-		"http://www.example.com/component/IFName",
-		"Short purpose of IF",
-		"",
-		"Longer description of IF",
-		"",
-		"",
-		make([]ComponentImpl, 0),
-	}
-	return aif
-}
-
 func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string) {
+
 	fname := ""
 	ifloc := ""  // component location, directory if locally found
 
 	// check url
 	var dat []byte
-	internet := false
+	var aif Component
 
 	if isUrlValid(url) {
-		// check if local dir overwrite
+		// file is available locally, since alias is defined
 		if val, ok := db.Locals[url]; !update && ok {
 			// check valid path
 			abspath, ok := isLocalDirValid(val)
@@ -735,33 +762,21 @@ func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string
 			}
 			ifloc = abspath
 			fname = filepath.Join(abspath, "arriccio.toml")
-//			println("local file: ", fname)
 			if _, err := os.Stat(fname); os.IsNotExist(err) {
 				log.Fatal("Local arriccio file not valid: ", fname)
 			}
+			dat, _ = ioutil.ReadFile(fname)
+			aif = readComponent(string(dat))
+		// file needs to be downloaded or taken from cache
 		} else {
-			fname = getUrlAsCachedFile(url, update)
-			internet = true
+			fname, aif = getRemoteComponent(url, update)
 		}
-		dat, _ = ioutil.ReadFile(fname)
 	} else {
 		log.Fatal("Component id is not a valid url: ", url)
 	}
-	aif := readComponent(string(dat))
-
-	if internet {
-		// check, if url is correct
-		if url != aif.Id {
-			log.Fatal("downloaded component description has not correct id!\n   url:", url, "\n   id:", aif.Id)
-		}
-
-		fsig :=  getUrlAsCachedFile(url + ".sig", update)
-		fkey :=  getUrlAsCachedFile(aif.SigningKey, update)
-
-		// check signature
-		if (!verifyFile(fname, fsig, fkey)) {
-			log.Fatal("downloaded component description not correctly signed: ", url)
-		}
+	// check, if url is correct
+	if url != aif.Id {
+		log.Fatal("downloaded component description has not correct id!\n   url:", url, "\n   id:", aif.Id)
 	}
 
 	return aif, ifloc
@@ -957,23 +972,16 @@ func installDownloads(infos []InstallInfo, unsafe bool) {
 
 			print("downloading: ", url)
 			// download data file, signature and key
-			fname := getUrlAsCachedFile(url, false)
-			fsig :=  getUrlAsCachedFile(url + ".sig", false)
-			fkey :=   getUrlAsCachedFile(key, false)
+			fname := getRemoteFile(url, key, false)
 			println(" - done")
 
-			// check signature
-			if (verifyFile(fname, fsig, fkey)) {
-				// extract, if signature is correct
-				dname := getImplFName( fname)
-				// check if already in cache, extracted
-				_, err := os.Stat(dname)
-				if err != nil {
-					// else extract
-					extractTarGzFile(fname, dname)
-				}
-			} else {
-				log.Fatal("downloaded file not correctly signed: ", url, " key: ", key)
+			// extract, if signature is correct
+			dname := getImplFName( fname)
+			// check if already in cache, extracted
+			_, err := os.Stat(dname)
+			if err != nil {
+				// else extract
+				extractTarGzFile(fname, dname)
 			}
 		}
 	} else {
