@@ -596,7 +596,7 @@ func getUrlAsCachedFile(urln string, update bool) (string, bool) {
 	return abs, isCached
 }
 
-func getRemoteComponent(urln string, update bool) (string, Component) {
+func getRemoteComponent(urln string, update bool) (string, Component, bool) {
 	fname, isCached := getUrlAsCachedFile(urln, update)
 	dat, _ := ioutil.ReadFile(fname)
 	aif := readComponent(string(dat))
@@ -619,7 +619,7 @@ func getRemoteComponent(urln string, update bool) (string, Component) {
 			log.Fatal("downloaded component description not correctly signed: ", urln)
 		}
 	}
-	return fname, aif
+	return fname, aif, !isCached
 }
 
 func getRemoteFile(urln string, urlkey string, update bool) string {
@@ -743,7 +743,7 @@ func writeComponent(db Component, fname string) {
 	}
 }
 
-func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string) {
+func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string, bool) {
 
 	fname := ""
 	ifloc := ""  // component location, directory if locally found
@@ -751,6 +751,7 @@ func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string
 	// check url
 	var dat []byte
 	var aif Component
+	var isDownload bool = false
 
 	if isUrlValid(url) {
 		// file is available locally, since alias is defined
@@ -769,7 +770,7 @@ func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string
 			aif = readComponent(string(dat))
 		// file needs to be downloaded or taken from cache
 		} else {
-			fname, aif = getRemoteComponent(url, update)
+			fname, aif, isDownload = getRemoteComponent(url, update)
 		}
 	} else {
 		log.Fatal("Component id is not a valid url: ", url)
@@ -779,7 +780,7 @@ func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string
 		log.Fatal("downloaded component description has not correct id!\n   url:", url, "\n   id:", aif.Id)
 	}
 
-	return aif, ifloc
+	return aif, ifloc, isDownload
 }
 
 
@@ -830,7 +831,7 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency, update bo
 		url = val
 	}
 	// load toml file, returns directory, if locally found
-	aif, ifloc := getComponentFromUrl(db, url, update)
+	aif, ifloc, isDownload := getComponentFromUrl(db, url, update)
 
 	// resultlist
 	rlist := []DependencyProcessingInfo{}
@@ -852,7 +853,7 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency, update bo
 		depsok := true
 		for _, dep := range impl.Dependencies {
 			// get valid impl
-			ok, r := resolveDependencies(db, dep.Id, []Dependency{dep}, update)
+			ok, r := resolveDependencies(db, dep.Id, []Dependency{dep}, update || isDownload)
 			if ok {
 				for _, el := range r {
 					rdeps = append(rdeps, el)
@@ -1124,9 +1125,9 @@ func showComponentInfo(cmd string, db AliasDB) {
 		url = val
 	}
 
-	aif, _ := getComponentFromUrl(db, url, false)
+	aif, _, _ := getComponentFromUrl(db, url, false)
 
-	fmt.Printf("%+v", aif)
+//	fmt.Printf("%+v", aif)
 
 	println("Component Info on:", aif.Id, "\n")
 	println("Purpose:")
@@ -1152,7 +1153,7 @@ func showLicenseInfo(cmd string, db AliasDB) {
 		log.Fatal("Could not resolve dependencies for license info on:", url)
 	}
 
-	aif, _ := getComponentFromUrl(db, url, false)
+	aif, _, _ := getComponentFromUrl(db, url, false)
 
 	println("License info on component:", aif.Id)
 	println("(including licenses of all subcomponents)\n")
