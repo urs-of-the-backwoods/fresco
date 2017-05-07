@@ -1,6 +1,7 @@
 # arriccio.toml file for Intonaco (Fresco Runtime)
 
-Id = "http://www.hgamer3d.org/component/Intonaco"
+Id = "http://www.hgamer3d.org/component/Intonaco.0517"
+
 Purpose = "Runtime of Fresco Freamework - Intonaco"
 Description = """
 Intonaco component of the Fresco framework.
@@ -25,89 +26,21 @@ limitations under the License.
 """
 signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
 
-#
-# Version 2
-#
-
-[[Impls]]
-  # 64 bit, linux implementation, version 2.0.0
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-linux-2.0.0.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "2.0.0"
-  architecture = "amd64"
-  os = "linux"
-
-[[Impls]]
-  # 64 bit, windows implementation, version 2.0.0
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-windows-2.0.0.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "2.0.0"
-  architecture = "amd64"
-  os = "windows"
-
-[[Impls]]
-  # 64 bit, mac implementation, version 2.0.0
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-darwin-2.0.0.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "2.0.0"
-  architecture = "amd64"
-  os = "darwin"
-
-#
-# Version 1
-#
-
-[[Impls]]
-  # 64 bit, linux implementation, version 1.0.0
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-linux-1.0.0.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "1.0.0"
-  architecture = "amd64"
-  os = "linux"
-
-[[Impls]]
-  # 64 bit, windows implementation, version 1.0.0
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-windows-1.0.0.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "1.0.0"
-  architecture = "amd64"
-  os = "windows"
-
-[[Impls]]
-  # 64 bit, mac implementation, version 1.0.0
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-darwin-1.0.0.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "1.0.0"
-  architecture = "amd64"
-  os = "darwin"
-
-#
-# Version 0
-#
-
-[[Impls]]
-  # 64 bit, linux implementation, version 0.1.2
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-linux-0.1.2.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "0.1.2"
-  architecture = "amd64"
-  os = "linux"
-
-[[Impls]]
+[[Implementation]]
   # 64 bit, windows implementation
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-windows-0.1.2.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "0.1.2"
+  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-windows-2.0.0.tar.gz"
   architecture = "amd64"
   os = "windows"
 
-[[Impls]]
+[[Implementation]]
+  # 64 bit, linux implementation
+  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-linux-2.0.0.tar.gz"
+  architecture = "amd64"
+  os = "linux"
+
+[[Implementation]]
   # 64 bit, mac implementation
-  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-darwin-0.1.2.tar.gz"
-  signingkey = "https://www.github.com/urs-of-the-backwoods.keys"
-  version = "0.1.2"
+  location = "http://www.hgamer3d.org/downloads/intonaco-amd64-darwin-2.0.0.tar.gz"
   architecture = "amd64"
   os = "darwin"
-
-
 

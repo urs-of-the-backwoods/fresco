@@ -83,21 +83,24 @@ if #arg > 0 then
 	if arg[1] == "intonaco" then
 		buildIntonaco()
 		os.exit(0)
+
 	elseif arg[1] == "arriccio" then
 		buildArriccio()
 		os.exit(0)
+
 	elseif arg[1] == "intonacoVersion" then
 		intonacoVersion()
 		os.exit(0)
-	--[[
-	elseif arg[1] == "register" then
-		os.execute("scripts" .. pathSep() .. "aio local http://www.hgamer3d.org/component/Intonaco package")
+
+	elseif arg[1] == "register-intonaco" then
+		os.execute("scripts" .. pathSep() .. "aio local http://www.hgamer3d.org/component/Intonaco.0517 intonaco/package")
 		os.exit(0)
-	elseif arg[1] == "unregister" then
-		os.execute("scripts" .. pathSep() .. "aio remove-local http://www.hgamer3d.org/component/Intonaco")
+
+	elseif arg[1] == "unregister-intonaco" then
+		os.execute("scripts" .. pathSep() .. "aio remove-local http://www.hgamer3d.org/component/Intonaco.0517")
 		os.exit(0)
-	--]]
 	end
+
 	print("wrong argument to build script:", arg[1])
 	os.exit(-1)  -- wrong argument given
 
