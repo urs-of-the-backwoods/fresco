@@ -112,6 +112,7 @@ impl  System for ObjectLibSystem  {
     }
 
     fn step_system(&self) {
+
         let cmd = self.queue.pop();
         match cmd {
             ObjectLibSystemCommands::AddEntityToOLS(ep, b) => {
@@ -123,56 +124,61 @@ impl  System for ObjectLibSystem  {
                         let ip = self.lib_if.create_item(*k, &v.get());
                         let tgip = thread_guard::Value::new(ip.clone());
 
-                        // set entity id on item, if interested in it
-                        match self.lib_if.get_message_sender(*k, CT_ENTITY_ID) 
-                        {
-                            Some(mfp_id) => {
-                                // encode to cbor as data, bytestring
-                                let id_u8 = unsafe { mem::transmute::<ProcessUniqueId, [u8; 16]>(e.id()) };
-                                let mut buf = vec![];      
-                                let mut enc = Encoder::new(buf);
-                                enc.bytes(&id_u8);
-                                set_c_value_on_object_lib_item(mfp_id, ip, &enc.into_writer());                
-                            },
-                            None => {}
-                        }
-                        // set attributes
-                        for (k2, v2) in e.values() {
-                            // add sender
-                            match self.lib_if.get_message_sender(*k, *k2)
+                        if ip != std::ptr::null() {
+
+                            // set entity id on item, if interested in it
+                            match self.lib_if.get_message_sender(*k, CT_ENTITY_ID) 
                             {
-                                Some(mfp) => {
-                                    let queue2 = self.queue.clone();
-                                    let tgmfp2 = thread_guard::Value::new(mfp);
-                                    let tgip2 = thread_guard::Value::new(ip.clone());
-                                    v2.add_callback(
-                                       Arc::new(move | av | { queue2.push(ObjectLibSystemCommands::SetValueOnObjectLibItem(tgmfp2.clone(), tgip2.clone(), av)); })
-                                        );
-                                    set_c_value_on_object_lib_item(mfp, ip, &v2.get());                
+                                Some(mfp_id) => {
+                                    // encode to cbor as data, bytestring
+                                    let id_u8 = unsafe { mem::transmute::<ProcessUniqueId, [u8; 16]>(e.id()) };
+                                    let mut buf = vec![];      
+                                    let mut enc = Encoder::new(buf);
+                                    enc.bytes(&id_u8);
+                                    set_c_value_on_object_lib_item(mfp_id, ip, &enc.into_writer());                
                                 },
                                 None => {}
                             }
-                            // register object lib callbacks
-                            self.lib_if.register_message_receiver(*k, *k2, ip, ep, object_lib_callback);
-                        }
-                        // drop logic
-                        let queue1 = self.queue.clone();
-                        let c = *k;
-                        v.add_dropper(
-                           Arc::new(move || { 
-//                                let b2 = Arc::new(Barrier::new(2));
-                            queue1.push(ObjectLibSystemCommands::RemoveObjectLibItemFromOLS(c, tgip.clone()));
-//                                b2.wait();
-                            })
-                        );
-                    }
-                });
+                            // set attributes
+                            for (k2, v2) in e.values() {
+                                // add sender
+                                match self.lib_if.get_message_sender(*k, *k2)
+                                {
+                                    Some(mfp) => {
+                                        let queue2 = self.queue.clone();
+                                        let tgmfp2 = thread_guard::Value::new(mfp);
+                                        let tgip2 = thread_guard::Value::new(ip.clone());
+                                        v2.add_callback(
+                                           Arc::new(move | av | { queue2.push(ObjectLibSystemCommands::SetValueOnObjectLibItem(tgmfp2.clone(), tgip2.clone(), av)); })
+                                            );
+                                        set_c_value_on_object_lib_item(mfp, ip, &v2.get());                
+                                    },
+                                    None => {}
+                                }
+                                // register object lib callbacks
+                                self.lib_if.register_message_receiver(*k, *k2, ip, ep, object_lib_callback);
+                            }
+                            // drop logic
+                            let queue1 = self.queue.clone();
+                            let c = *k;
+                            v.add_dropper(
+                               Arc::new(move || { 
+    //                                let b2 = Arc::new(Barrier::new(2));
+                                queue1.push(ObjectLibSystemCommands::RemoveObjectLibItemFromOLS(c, tgip.clone()));
+    //                                b2.wait();
+                                })
+                            );
+                        }; // if ip != 0
+                     } // loop over k, v
+                });  // entity do with 
 
                 b.wait(); // finalize wait, to free calling thread
-            },
+            }, // cmd
+
             ObjectLibSystemCommands::SetValueOnObjectLibItem(mfp, ip, val) => {
                 set_c_value_on_object_lib_item(*(mfp.borrow_mut()), *(ip.borrow_mut()), &val);              
             },
+
             ObjectLibSystemCommands::RemoveObjectLibItemFromOLS(ct, ip) => {
                 self.lib_if.destroy_item(ct, *(ip.borrow_mut()));          // to do: insert u64 type !!!
                 // b.wait();

@@ -700,23 +700,23 @@ type Component struct {
 	License     string // License type
 	FullLicenseText string // full text of license, included in component description
 
-	Implementation []ComponentImpl
+	Implementations []ComponentImplementation
 }
 
-// ComponentImpl describes the properties of an implementation of a component.
+// ComponentImplementation describes the properties of an implementation of a component.
 // In addition to metadata it also contains the components, it depends on, the dependencies.
-type ComponentImpl struct {
+type ComponentImplementation struct {
 	Architecture string
 	OS           string
 	Location     string // download Url tgz
 	Command      string
 	Environment  []string
-	Dependencies []Dependency
+	Dependencies []ImplementationDependency
 }
 
 // A dependency describes on which other components an implementation of a component depends on.
 // There is a version constraint, which says which range of versions is acceptable for the implementation.
-type Dependency struct {
+type ImplementationDependency struct {
 	Id                string
 	Environment       []string
 }
@@ -791,7 +791,7 @@ func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string
 // We process dependency resolution in steps, each step adds some information to the results.
 type DependencyProcessingInfo struct {
 	comp Component
-	impl ComponentImpl
+	impl ComponentImplementation
 	installdir string
 	settings []string
 }
@@ -819,7 +819,7 @@ type InstallInfo struct {
 // the needed environment setting, which are used to run the command.
 // The output is a bool stating if the resolution was successful (true) and a list of 
 // gathered processing information for the next step - running the command.
-func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency, update bool) (bool, []DependencyProcessingInfo) {
+func resolveDependencies(db AliasDB, cmd string, thisdep []ImplementationDependency, update bool) (bool, []DependencyProcessingInfo) {
 
 //	println("resolve Dependencies for: ", cmd)
 
@@ -837,8 +837,8 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency, update bo
 	rlist := []DependencyProcessingInfo{}
 
 	// build list of impl, sorted by version
-	ilist := []ComponentImpl{}
-	for _, impl := range aif.Implementation {
+	ilist := []ComponentImplementation{}
+	for _, impl := range aif.Implementations {
 		if matchArchAndOs(impl.Architecture, impl.OS) {
 			ilist = append(ilist, impl)
 		}
@@ -853,7 +853,7 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []Dependency, update bo
 		depsok := true
 		for _, dep := range impl.Dependencies {
 			// get valid impl
-			ok, r := resolveDependencies(db, dep.Id, []Dependency{dep}, update || isDownload)
+			ok, r := resolveDependencies(db, dep.Id, []ImplementationDependency{dep}, update || isDownload)
 			if ok {
 				for _, el := range r {
 					rdeps = append(rdeps, el)
@@ -1148,7 +1148,7 @@ func showLicenseInfo(cmd string, db AliasDB) {
 	}
 
 	// resolve dependencies
-	ok, rlist := resolveDependencies(db, url, []Dependency{}, false)
+	ok, rlist := resolveDependencies(db, url, []ImplementationDependency{}, false)
 	if !ok {
 		log.Fatal("Could not resolve dependencies for license info on:", url)
 	}
@@ -1178,7 +1178,7 @@ func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args [
 	}
 
 	// resolve dependencies
-	ok, rlist := resolveDependencies(db, url, []Dependency{}, update)
+	ok, rlist := resolveDependencies(db, url, []ImplementationDependency{}, update)
 	if !ok {
 		log.Fatal("Could not resolve dependencies for cmd: ", url)
 	}

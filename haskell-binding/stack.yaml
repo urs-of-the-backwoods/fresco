@@ -9,15 +9,16 @@
 #  file: haskell/stack.yaml
 #
 
-resolver: lts-6.27
+resolver: lts-8.20
 
 flags:
   binary-serialise-cbor:
     newtime15: true
 
 packages:
-- '../binary-serialise-cbor'
-- '../fresco-haskell'
+- location:
+    git: https://github.com/well-typed/binary-serialise-cbor.git
+    commit: c617075
 - '.'
 
 extra-deps: []

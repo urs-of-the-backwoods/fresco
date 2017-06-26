@@ -3,3 +3,4 @@ intonaco/target
 intonaco/Cargo.lock
 arriccio/aio.exe
 arriccio/aio
+haskell-binding/.stack-work

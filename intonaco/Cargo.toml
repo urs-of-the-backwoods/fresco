@@ -13,13 +13,14 @@
 name = "intonaco"
 version = "2.0.0"
 authors = ["uotbw <info@hgamer3d.org>"]
+build = "build.rs"
 
 [lib]
 crate-type = ["dylib"]
 
 [dependencies]
 libc = "*"
-cbor-codec = { git = "https://gitlab.com/twittner/cbor-codec.git", version = "0.7" }
+cbor-codec = { git = "https://gitlab.com/urs-of-the-backwoods/cbor-codec.git", commit="de0fab35" }
 lazy_static = "0.2"
 crossbeam = "0.2"
 snowflake = "1.2"
