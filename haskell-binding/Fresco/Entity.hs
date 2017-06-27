@@ -93,7 +93,9 @@ e #! (ComponentType c) = fromJust $ M.lookup c e >>= fromMsg
 
 -- | get the ComponentType as an maybe, in case wrong type
 (#) :: Serialise a => EntityData -> ComponentType a -> Maybe a
-e # (ComponentType c) = M.lookup c e >>= fromMsg
+e # (ComponentType c) = case M.lookup c e of
+                          Nothing -> Nothing
+                          Just msg -> fromMsg msg
 
 -- | modification function, throws exception, if ComponentType not present
 updateDataC :: Serialise a => EntityData -> ComponentType a -> (a -> a) -> EntityData
@@ -120,7 +122,7 @@ registerReceiverCBS (CallbackSystem cbs) (Entity ep) (ComponentType ct) f = do
   -- MsgFunction: Ptr () -> CULong -> Ptr CChar -> CInt -> IO CInt
   let f' = \_ _ cdata len -> do
                                 bs <- packCStringLen (cdata, fromIntegral len)
-                                let c = fromJust(fromMsg (fromStrict bs))
+                                let c = fromMsg (fromStrict bs)
                                 f c
                                 return 0
   mf <- mkMsgEntityFnPtr f'
