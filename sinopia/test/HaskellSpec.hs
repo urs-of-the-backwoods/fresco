@@ -50,7 +50,7 @@ instance Serialise Shape where
   encode (Pyramid v1 v2) = encode (3::Int) <> encode v1 <> encode v2
   encode (Torus) = encode (4::Int)
   decode = do
-    i <- decode :: Decoder Int
+    i <- decode :: Decoder s Int 
     case i of
         0 -> (pure Cube)
         1 -> (pure Plane)

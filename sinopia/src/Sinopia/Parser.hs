@@ -108,7 +108,7 @@ parseBT =
     <|> do
             rword "List" 
             t <- parens parseBT
-            return (BT_LT [t])
+            return (BT_LT t)
     <|> (identifier >>= \v -> return (BT_TN v))
 
 parseEnumField :: Parser EnumField

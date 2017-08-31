@@ -45,7 +45,7 @@ data Convertible = Convertible {
 
 conversion :: Convertible -> T.Text -> [TopLevelType] -> T.Text
 conversion cn fname lTop = 
-	(headDef cn) fname lTop <> 
+  (headDef cn) fname lTop <> 
     "\n" <>
     (T.concat (
       (map (typeDef cn) lTop) ++

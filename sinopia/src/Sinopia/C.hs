@@ -53,7 +53,7 @@ bT' = \t -> case t of
     BT_PT PT_Float64 -> "double"
     BT_PT PT_Text -> "std::string"
     BT_PT PT_Data -> "std::vector<uint8_t>"
-    BT_LT a -> "std::vector<" <> (bT' (head a)) <> ">"
+    BT_LT a -> "std::vector<" <> (bT' a) <> ">"
     BT_TN n -> n
 
 typeDef' :: Bool -> TopLevelType -> T.Text
@@ -81,13 +81,22 @@ typeDef' defOnly t = if defOnly
         _ -> ""
 
 ctDef' :: Bool -> TopLevelType -> T.Text
-ctDef' defOnly t = if defOnly 
-    then case t of
-        TL_ID (Id64 tn i) -> "extern const uint64_t ct" <> tN' t <> ";\n"
-        _ -> ""
-    else case t of
-        TL_ID (Id64 tn i) -> "const uint64_t ct" <> tN' t <> " = 0x" <> (T.pack (showHex i "")) <> ";\n"
-        _ -> ""
+ctDef' defOnly t = let
+    tnt = cap1 (typeName t)
+    in if defOnly 
+        then case t of
+            TL_ID (Id64 tn i) -> "extern const uint64_t ct" <> tnt <> ";\n"
+            _ -> ""
+        else case t of
+            TL_ID (Id64 tn i) -> "const uint64_t ct" <> tnt <> " = 0x" <> (T.pack (showHex i "")) <> ";\n"
+            _ -> ""
+
+
+readEnterContainer = "{ CborValue itb; CborValue *ita = it; CborValue *it = &itb; cbor_value_enter_container(ita, it);\n" 
+readLeaveContainer = "cbor_value_leave_container(ita, it); }\n"
+writeEnterContainer' l = "{ CborEncoder encb; CborEncoder *enca = enc; CborEncoder *enc = &encb; cbor_encoder_create_array(enca, enc, " <> l <> ");\n"
+writeEnterContainer l = writeEnterContainer' (T.pack (show l)) 
+writeLeaveContainer = "cbor_encoder_close_container_checked(enca, enc); }\n"
 
 getReaderDef :: BaseType -> (T.Text -> T.Text)
 getReaderDef bt = case bt of
@@ -105,9 +114,18 @@ getReaderDef bt = case bt of
     BT_PT PT_Float64 -> \t -> "cbor_value_get_double(it, &(" <> t <> ")); cbor_value_advance_fixed(it);\n"
     BT_PT PT_Text -> \t -> "{ size_t l; cbor_value_calculate_string_length(it, &l); " <> t <> ".resize(l+1);\n" <>
         "        cbor_value_copy_text_string(it, (char *)(" <> t <> ".c_str()), &l, NULL); cbor_value_advance(it);}\n"
-    BT_PT PT_Data ->  \t -> "{ size_t l; cbor_value_calculate_string_length(it, &l); " <> t <> ".resize(l+1);\n" <>
+
+    --  cbor_value_get_array_length(const CborValue *value, size_t *length)
+
+    BT_PT PT_Data ->  \t -> "{ size_t l; cbor_value_get_array_length(it, &l); " <> t <> ".resize(l+1);\n" <>
         "        cbor_value_copy_byte_string(it, " <> t <> ".data(), &l, NULL); cbor_value_advance(it);}\n"
-    BT_LT a -> const "/* TBD */"
+
+    BT_LT a -> \t -> readEnterContainer <>
+                     "  size_t l; cbor_value_get_array_length(it, &l); \n" <>
+                     "  for (int i = 0; i < l; i++) { " <> 
+                     "  " <> bT' a <> " item; " <> getReaderDef a "item" <> "; " <> t <> ".push_back(item); } \n" <>  
+                     readLeaveContainer
+
     BT_TN n -> \t -> "read" <> n <> "(it, &(" <> t <> "));\n"
 
 getWriterDef :: BaseType -> (T.Text -> T.Text)
@@ -126,93 +144,66 @@ getWriterDef bt = case bt of
     BT_PT PT_Float64 -> \t -> "cbor_encode_double(enc, " <> t <> ");\n"
     BT_PT PT_Text ->  \t -> "cbor_encode_text_stringz(enc, " <> t <> ".c_str());\n"
     BT_PT PT_Data ->   \t -> "cbor_encode_byte_string(enc, " <> t <> ".data(), " <> t <> ".size());\n"
-    BT_LT a -> const "/* TBD */"
+    BT_LT a -> \t -> "{ size_t l; l = " <> t <> ".size(); \n" <>
+                     writeEnterContainer' "l" <>
+                     "for (int i = 0; i < l; i++) {" <> 
+                     getWriterDef a (t <> "[i]")  <> "; }" <>
+                     writeLeaveContainer <> "}\n"
     BT_TN n -> \t -> "write" <> n <> "(enc, " <> t <> ");\n"
     
 nsEnd' = "\n} // end of namespacd cdb\n"
 
-serDef' defOnly t = if defOnly
-    then case t of
-        TL_ET e@(EnumType tn fs) -> readFunction t e <> writeFunction t e where
-            readFunction t e = readFHead t e 
-            sN = low1 $ tn
-            tnt = tN' t 
-            readFHead t _ = "void read" <> tnt <> "(CborValue *it0, " <> tnt <> " *" <> sN <> ");\n"
+serDef' defOnly t = let
 
-            writeFunction t e = writeFHead t e
-            writeFHead t e = "void write" <> tnt <> "(CborEncoder *enc0, " <> tnt <> " " <> sN <> ");\n"
+    sN = low1 (typeName t)
+    tnt = cap1 (typeName t)
+    readFunctionHead = "void read" <> tnt <> "(CborValue *it, " <> tnt <> " *" <> sN <> ")"
+    writeFunctionHead = "void write" <> tnt <> "(CborEncoder *enc, " <> tnt <> " " <> sN <> ")"
+    functionHeaders = readFunctionHead <> ";\n" <> writeFunctionHead <> ";\n" 
+    readFunction fbody = readFunctionHead <> " {\n" <> fbody <> "}\n\n"
+    writeFunction fbody = writeFunctionHead <> " {\n" <> fbody <> "}\n\n"
+    functions readBody writeBody = readFunction readBody <> writeFunction writeBody
 
-        TL_ST s@(StructType tn fs) -> readFunction t s <> writeFunction t s where
-            readFunction t s = readFHead t s 
-            sN = low1 $ tn
-            tnt = tN' t 
-            readFHead t _ = "void read" <> tnt <> "(CborValue *it0, " <> tnt <> " *" <> sN <> ");\n"
+    in 
+        if defOnly
+            then case t of
+                TL_ET _ -> functionHeaders
+                TL_ST _ -> functionHeaders
+                TL_TD (TypeDeclaration tn bt) -> functionHeaders
+                _ -> ""
 
-            writeFunction t s =  writeFHead t s 
-            writeFHead t s =  "void write" <> tnt <> "(CborEncoder *enc0, " <> tnt <> " " <> sN <> ");\n"
+            else case t of
+                TL_ET e@(EnumType tn fs) -> functions readBody writeBody where
+                    readBody = readEnterContainer <> readSelector <> readFElems <> readLeaveContainer
+                    readSelector = "int i; cbor_value_get_int(it, &i); cbor_value_advance_fixed(it);\n    " 
+                                   <> sN <> "->selector = (Enum" <> tnt <> ")i;\n"
+                    readFElems = T.concat (map readFElem (zip [0..] fs))
+                    readFElem (i, e@(EnumField cn bts)) = "    if (" <> sN <> "->selector == " <> (T.pack (show i)) <> ") {\n" <> T.concat (map (readFBt t cn) (zip [0..] bts)) <> "    };\n"
+                    readFBt t cn (n, bt) =  "        " <> ((getReaderDef bt) (sN <> "->data." <> cn <> ".value" <> (T.pack (show n))))
 
-        TL_TD (TypeDeclaration tn bt) ->  readFunction <> writeFunction where
-            readFunction = readFHead 
-            sN = low1 $ tn
-            tnt = tN' t 
-            readFHead = "void read" <> tnt <> "(CborValue *it, " <> tnt <> " *" <> sN <> ");\n" 
 
-            writeFunction =  writeFHead 
-            writeFHead = "void write" <> tnt <> "(CborEncoder *enc, " <> tnt <> " " <> sN <> ");\n"
-        _ -> ""
-    else case t of
-        TL_ET e@(EnumType tn fs) -> readFunction t e <> writeFunction t e where
-            readFunction t e = readFHead t e <> readFElems t e <> readFFooter
-            sN = low1 $ tn
-            tnt = tN' t 
-            readFHead t _ = "void read" <> tnt <> "(CborValue *it0, " <> tnt <> " *" <> sN <> ")\n{\n" <> readFCont <>
-                            "    int i; cbor_value_get_int(it, &i); cbor_value_advance_fixed(it);\n    " <> sN <> "->selector = (Enum" <> tnt <> ")i;\n"
-            readFCont = "    CborValue it1; CborValue *it = &it1; cbor_value_enter_container(it0, it);\n" 
-            readFElems t e@(EnumType tn fs) = T.concat (map readFElem (zip [0..] fs))
-            readFElem (i, e@(EnumField cn bts)) = "    if (" <> sN <> "->selector == " <> (T.pack (show i)) <> ") {\n" <> T.concat (map (readFBt t cn) (zip [0..] bts)) <> "    };\n"
-            readFBt t cn (n, bt) =  "        " <> ((getReaderDef bt) (sN <> "->data." <> cn <> ".value" <> (T.pack (show n))))
-            readFFooter = "    cbor_value_leave_container(it0, it);\n}\n\n"
+                    writeBody = T.concat (map writeFElem (zip [0..] fs))
+                    writeFElem (i, e@(EnumField cn bts)) = writeFElemHead i <> writeEnterContainer ((length bts) + 1) <> writeFElemNum sN <> 
+                                                           writeFElemFBs t cn bts <> writeLeaveContainer 
+                    writeFElemHead i = "    if (" <> sN <> ".selector == " <> (T.pack (show i)) <> ") \n"
+                    writeFElemNum sN = "        cbor_encode_uint(enc, (uint64_t)" <> sN <> ".selector);\n"
+                    writeFElemFBs t cn bts = T.concat (map (writeFBt t cn) (zip [0..] bts))
+                    writeFBt t cn (n, bt) =  "        " <> ((getWriterDef bt) (sN <> ".data." <> cn <> ".value" <> (T.pack (show n))))
 
-            writeFunction t e = writeFHead t e <> writeFElems t e <> "}\n\n"
-            writeFHead t e = "void write" <> tnt <> "(CborEncoder *enc0, " <> tnt <> " " <> sN <> ")\n{\n"
-            writeFElems t e = T.concat (map writeFElem (zip [0..] fs))
-            writeFElem (i, e@(EnumField cn bts)) = writeFElemHead i <> writeFElemCont bts <> writeFElemNum sN <> writeFElemFBs t cn bts <> writeFElemFooter 
-            writeFElemHead i = "    if (" <> sN <> ".selector == " <> (T.pack (show i)) <> ") {\n"
-            writeFElemCont bts = "        CborEncoder enc1; CborEncoder* enc = &enc1; cbor_encoder_create_array(enc0, enc, " <> (T.pack (show (length bts + 1))) <> ");\n" 
-            writeFElemNum sN = "        cbor_encode_uint(enc, (uint64_t)" <> sN <> ".selector);\n"
-            writeFElemFBs t cn bts = T.concat (map (writeFBt t cn) (zip [0..] bts))
-            writeFElemFooter = "        cbor_encoder_close_container_checked(enc0, enc);\n    };\n"
-            writeFBt t cn (n, bt) =  "        " <> ((getWriterDef bt) (sN <> ".data." <> cn <> ".value" <> (T.pack (show n))))
+                TL_ST s@(StructType tn fs) -> functions readBody writeBody where
+                    readBody = readEnterContainer <> readFElems <> readLeaveContainer
+                    readFElems = T.concat (map readFElem fs)
+                    readFElem f@(StructField cn bt) = "    " <> ((getReaderDef bt) (sN <> "->" <> cn))
 
-        TL_ST s@(StructType tn fs) -> readFunction t s <> writeFunction t s where
-            readFunction t s = readFHead t s <> readFElems t s <> readFFooter
-            sN = low1 $ tn
-            tnt = tN' t 
-            readFHead t _ = "void read" <> tnt <> "(CborValue *it0, " <> tnt <> " *" <> sN <> ")\n{\n" <> readFCont
-            readFCont = "    CborValue it1; CborValue* it = &it1; cbor_value_enter_container(it0, it);\n" 
-            readFElems t s@(StructType tn fs) = T.concat (map readFElem fs)
-            readFElem f@(StructField cn bt) = "    " <> ((getReaderDef bt) (sN <> "->" <> cn))
-            readFFooter = "    cbor_value_leave_container(it0, it);\n}\n\n"
+                    writeBody = writeEnterContainer (length fs) <> writeFElems <> writeLeaveContainer
+                    writeFElems = T.concat (map writeFElem fs)
+                    writeFElem s@(StructField cn bt) = writeFBt t cn bt
+                    writeFBt t cn bt =  "    " <> ((getWriterDef bt) (sN <> "." <> cn ))
 
-            writeFunction t s =  writeFHead t s <> writeFElems t s <> writeFFooter
-            writeFHead t s =  "void write" <> tnt <> "(CborEncoder *enc0, " <> tnt <> " " <> sN <> ")\n{\n" <> writeFCont
-            writeFCont = "    CborEncoder enc1; CborEncoder* enc = &enc1; cbor_encoder_create_array(enc0, enc, " <> (T.pack (show (length fs))) <> ");\n"
-            writeFElems t e = T.concat (map writeFElem fs)
-            writeFElem s@(StructField cn bt) = writeFBt t cn bt
-            writeFBt t cn bt =  "    " <> ((getWriterDef bt) (sN <> "." <> cn ))
-            writeFFooter = "    cbor_encoder_close_container_checked(enc0, enc);\n}\n\n"
-
-        TL_TD (TypeDeclaration tn bt) ->  readFunction <> writeFunction where
-            readFunction = readFHead <> readFBt <> "}\n\n"
-            sN = low1 $ tn
-            tnt = tN' t 
-            readFHead = "void read" <> tnt <> "(CborValue *it, " <> tnt <> " *" <> sN <> ")\n{\n" 
-            readFBt = "    " <> bT' bt <> " rval;\n    " <> ((getReaderDef bt) "rval") <> "    *" <> sN <> " = rval;\n"
-
-            writeFunction =  writeFHead <> writeFBt <> "}\n\n"
-            writeFHead = "void write" <> tnt <> "(CborEncoder *enc, " <> tnt <> " " <> sN <> ")\n{\n"
-            writeFBt =  "    " <> ((getWriterDef bt) sN)
-        _ -> ""
+                TL_TD (TypeDeclaration tn bt) ->  readFunction readBody <> writeFunction writeBody where
+                    readBody = "    " <> bT' bt <> " rval;\n    " <> ((getReaderDef bt) "rval") <> "    *" <> sN <> " = rval;\n"
+                    writeBody =  "    " <> ((getWriterDef bt) sN)
+                _ -> ""
 
 
 headDef' :: Bool -> T.Text -> [TopLevelType] -> T.Text

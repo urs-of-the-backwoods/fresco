@@ -9,18 +9,18 @@
 #  file: sinopia/stack.yaml
 #
 
-extra-deps: []
-resolver: lts-6.27
-flags: {}
+resolver: lts-8.20
 
 flags:
   binary-serialise-cbor:
     newtime15: true
 
 packages:
+- location:
+    git: https://github.com/well-typed/binary-serialise-cbor.git
+    commit: c617075
+  extra-dep: true
+- location: '../haskell-binding'
+  extra-dep: true
 - '.'
-- location: '../binary-serialise-cbor'
-  extra-dep: true
-- location: '../fresco-haskell'
-  extra-dep: true
 

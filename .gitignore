@@ -1,6 +1,8 @@
 intonaco/package
 intonaco/target
 intonaco/Cargo.lock
+sinopia/sinopia.exe
+sinopia/.stack-work
 arriccio/aio.exe
 arriccio/aio
 haskell-binding/.stack-work

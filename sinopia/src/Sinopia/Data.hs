@@ -33,7 +33,7 @@ data Primitive = PT_Bool | PT_Null
 
 data BaseType = BT_PT Primitive
                 | BT_TN TypeName
-                | BT_LT [BaseType]
+                | BT_LT BaseType
                 deriving (Show, Read, Eq)
 
 data EnumField = EnumField FieldName [BaseType]        

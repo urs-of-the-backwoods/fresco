@@ -51,9 +51,9 @@ bT' = \t -> case t of
     BT_PT PT_Float64 -> "Double"
     BT_PT PT_Text -> "Text"
     BT_PT PT_Data -> "ByteString"
-    BT_LT a -> "[" <> (bT' (head a)) <> "]"
+    BT_LT a -> "[" <> (bT' a) <> "]"
     BT_TN n -> n
-    _ -> error "Unknown Base Type in hBType!"
+--    _ -> error "Unknown Base Type in hBType!"
 
 typeDef' :: Bool -> TopLevelType -> T.Text
 typeDef' _ t = case t of
@@ -80,7 +80,7 @@ serDef' _ t = case t of
                                 arrRList ts = "encodeListLen " <> ((T.pack . show) ((length ts) + 1)) <> " <> " 
                                 tsEncodeR ts = T.concat (map (\t -> "<> encode v" <> (T.pack . show) t) [1 .. length ts])
                                 dList tn fs = decodeHead <> T.concat (L.map fDecode (zip fs [0..])) <> "\n"
-                                decodeHead = "    decode = do\n        decodeListLen\n        i <- decode :: Decoder Int\n        case i of\n"
+                                decodeHead = "    decode = do\n        decodeListLen\n        i <- decode :: Decoder s Int\n        case i of\n"
                                 fDecode ((EnumField n ts), i) = "            " <> ((T.pack .show) i)<> " -> (" <> decodeR n ts <> ")\n"
                                 decodeR n ts = if length ts == 0 
                                                     then "pure " <> enumElemN' tn n

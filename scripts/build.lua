@@ -5,6 +5,18 @@ require("os_arch")
 require("util")
 require("lfs")
 
+-- local functions, utilities
+local function aioString()
+	o, a = getOS()
+	if o == "windows" then
+		return  glue.bin .. "\\win\\aio.exe"	
+	elseif o == "darwin" then
+		return glue.bin .. "/mac/aio"	
+	elseif o == "linux" then
+		return glue.bin .. "/linux/aio"	
+	end
+end
+
 local function getIntonacoVersion()
 	local p = debug.getinfo(1).source:gsub('\\', '/'):match("@?(.*/)")
 	if p then
@@ -68,17 +80,34 @@ local function buildArriccio()
 	end
 end
 
---[[
-local function runDownload()
-	-- download cbor-codec
-	local cborDownloadPath = absPath(relToScriptPath("../cbor-codec"))
-	local cmd = "wget -P " .. cborDownloadPath .. " -nv https://gitlab.com/twittner/cbor-codec/repository/archive.zip?ref=v0.7.1"
-	os.execute(cmd)
-	os.execute("cd " .. cborDownloadPath .. " && mv archive.zip* cbor-codec-0.7.1.zip")
+local function testSinopia()
+	lfs.chdir("sinopia")
+	os.execute(".." .. pathSep() .. aioString() .. " http://www.hgamer3d.org/tools/Stack.0617 test")
 end
---]]
 
--- do something else, if parameter says so
+local function buildSinopia()
+	lfs.chdir("sinopia")
+	os.execute(".." .. pathSep() .. aioString() .. " http://www.hgamer3d.org/tools/Stack.0617 install --local-bin-path .")
+end
+
+local function helpText()
+	print([[
+fresco build script, usage:
+
+build <command>
+
+<command> might be:
+  intonaco
+  arriccio
+  sinopia
+  sinopia-test
+  register-intonaco - register local version in aio
+  unregister-intonaco - remove registration in aio
+	]])
+end
+
+-- main script, check argument
+
 if #arg > 0 then
 	if arg[1] == "intonaco" then
 		buildIntonaco()
@@ -88,34 +117,31 @@ if #arg > 0 then
 		buildArriccio()
 		os.exit(0)
 
+	elseif arg[1] == "sinopia" then
+		buildSinopia()
+		os.exit(0)
+
+	elseif arg[1] == "sinopia-test" then
+		testSinopia()
+		os.exit(0)
+
 	elseif arg[1] == "intonacoVersion" then
 		intonacoVersion()
 		os.exit(0)
 
 	elseif arg[1] == "register-intonaco" then
-		os.execute("scripts" .. pathSep() .. "aio local http://www.hgamer3d.org/component/Intonaco.0517 intonaco/package")
+		os.execute(aioString() .. " aio local http://www.hgamer3d.org/component/Intonaco.0517 intonaco/package")
 		os.exit(0)
 
 	elseif arg[1] == "unregister-intonaco" then
-		os.execute("scripts" .. pathSep() .. "aio remove-local http://www.hgamer3d.org/component/Intonaco.0517")
+		os.execute(aioString() .. " remove-local http://www.hgamer3d.org/component/Intonaco.0517")
 		os.exit(0)
 	end
 
 	print("wrong argument to build script:", arg[1])
-	os.exit(-1)  -- wrong argument given
-
--- give hints about commands
-else
-	print([[
-
-fresco build script, commands:
-
-  intonaco - build intonaco
-  register-intonaco - register local version in aio
-  unregister-intonaco - remove registration in aio
-
-  arriccio - build arriccio
-	]])
-	os.exit(0)
 end
+
+-- in case no command exits, still give help and exit then
+helpText()
+os.exit(-1)
 
