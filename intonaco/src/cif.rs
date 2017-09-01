@@ -133,7 +133,8 @@ pub extern "C" fn inEntityId(ep: EntityPointer, ip: FrItem, rcb: FrMessageFn) {
     let id_bs2 = &enc.into_writer();               
 
     unsafe {
-        rcb(ip, id_bs2.as_ptr(), id_bs2.len() as u32);
+        // rcb(ip, id_bs2.as_ptr(), id_bs2.len() as u32);
+        rcb(ip, id_u8.as_ptr(), id_u8.len() as u32);
     }
 }
 

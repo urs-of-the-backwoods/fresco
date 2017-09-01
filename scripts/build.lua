@@ -130,7 +130,7 @@ if #arg > 0 then
 		os.exit(0)
 
 	elseif arg[1] == "register-intonaco" then
-		os.execute(aioString() .. " aio local http://www.hgamer3d.org/component/Intonaco.0517 intonaco/package")
+		os.execute(aioString() .. " local http://www.hgamer3d.org/component/Intonaco.0517 intonaco/package")
 		os.exit(0)
 
 	elseif arg[1] == "unregister-intonaco" then
