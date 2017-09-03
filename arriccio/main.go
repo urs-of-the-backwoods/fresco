@@ -198,6 +198,20 @@ func extractTarGzFile(sourcefile string, outdir string) {
                          }
 
                          writer.Close()
+
+		case tar.TypeLink:
+			dest := filepath.Join(outdir, header.Linkname)
+			if err := os.Link(dest, filename); err != nil {
+                         	fmt.Printf("error in untar type : %c in file %s", header.Typeflag, filename)
+				return 
+			}
+
+		case tar.TypeSymlink:
+			if err := os.Symlink(header.Linkname, filename); err != nil {
+                         	fmt.Printf("error in untar type : %c in file %s", header.Typeflag, filename)
+				return 
+		}
+
                  default:
                          fmt.Printf("Unable to untar type : %c in file %s", header.Typeflag, filename)
                  }

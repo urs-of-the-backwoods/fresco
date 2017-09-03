@@ -18,12 +18,7 @@ local function aioString()
 end
 
 local function getIntonacoVersion()
-	local p = debug.getinfo(1).source:gsub('\\', '/'):match("@?(.*/)")
-	if p then
-		io.input(p.."../Cargo.toml")
-	else
-		io.input("../Cargo.toml")
-	end
+	io.input("../intonaco/Cargo.toml")
 	while true do
 		local line = io.read()
 		if line == nil then break end
