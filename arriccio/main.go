@@ -50,7 +50,7 @@ import (
 // version
 //
 
-var version_aio = "0.2.0"
+var version_aio = "0.2.1"
 
 // version remarks
 // 0.2.0
