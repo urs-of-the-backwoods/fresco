@@ -61,7 +61,16 @@ end
 local function buildIntonaco()
 	-- build executable
 	lfs.chdir("intonaco")
-	os.execute("cargo build")
+	o, a = getOS()
+	if o == "windows" then
+		local fs = assert(io.popen(".." .. pathSep() .. aioString() .. " http://www.hgamer3d.org/tools/DetectVS.0717"), "detect vs not working")
+		local msDir = fs:read()
+		fs:close()
+		msCmd = msDir .. "\\VC\\Auxiliary\\Build\\vcvars64.bat"
+		os.execute("call \"" .. msCmd .. "\" && cargo build")
+	else
+		os.execute("cargo build")
+	end
 	packageIntonaco()
 end
 

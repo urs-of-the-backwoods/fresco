@@ -14,25 +14,24 @@ The configuration file is written in TOML and contains the following information
 - `implementation` platform specific implementations (details below)
 - `implementation.dependencies` dependenies of specific implementation
 
-## Implementation
+### Implementation
 
 There can be multiple implementations, so this is given as an array of tables (see TOML syntax guide). Contents of an Implemenation can be:
 
 - `architecture` the underlying machine architecture for this implementation, possible values are `amd64` and `*`
 - `operating-system` the OS for this implementation, values can be: `windows`, `darwin` or `linux`
 - `archive-download-location` the url of an downloadable archive, containing the implementation itself
-- `archive-signing-key` signature key for the archive
 - `start-local-command` command to start in target folder of unpacked archive
 - `environment-settings` array of commands to modify environement, see below
 
-## Implementation Dependencies
+### Implementation Dependencies
 
 The implementation dependencies are also given as an array of tables below each (!) implementation, since they might be implementation specific. They can contain the following keys:
 
 - `id-url` the id of the dependency
 - `environment-settings` settings for the dependency in this specific context (dependency injection)
 
-## Environment Settings
+### Environment Settings
 
 For each component environment settings can be specified, either directly in the component itself, or in the dependency section. Those environemnt settings are given as an array of strings, each string being a single command. The following commands are possible:
 
@@ -41,7 +40,7 @@ For each component environment settings can be specified, either directly in the
 
 The environment settings are used to let components find each others locations, so that for example an executable is able to load a needed runtime library, or similar.
 
-
+tbd
 
 
 

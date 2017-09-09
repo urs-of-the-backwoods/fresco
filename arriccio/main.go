@@ -1,6 +1,6 @@
 // 
 //  Fresco Framework for Multi-Language Programming
-//  Copyright 2015-2016 Peter Althainz
+//  Copyright 2015-2017 Peter Althainz
 //    
 //  Distributed under the Apache License, Version 2.0
 //  (See attached file LICENSE or copy at 
@@ -50,9 +50,12 @@ import (
 // version
 //
 
-var version_aio = "0.2.1"
+var version_aio = "0.2.2"
 
 // version remarks
+// 0.2.2
+//	  new names for all the sections, to make arriccio.toml files clearer
+//
 // 0.2.0
 //	  removed all version checks, simplified config file
 //	  one ssh key for all downloads of one package
@@ -707,32 +710,30 @@ func writeAliasDB(db AliasDB) {
 
 // Components describe some functionality or data. They can be implemented for different platforms, os.
 type Component struct {
-	Id          string // Url as id
-	Purpose     string // short summary of component purpose
-	Description string // longer description
-	SigningKey	string // https location of public key for signature
-	License     string // License type
-	FullLicenseText string // full text of license, included in component description
-
-	Implementations []ComponentImplementation
+	Id          string `toml:"id-url"` // Url as id
+	Description string `toml:"description"` // description
+	SigningKey	string `toml:"signing-key"` // https location of public key for signature
+	License     string `toml:"license-short"` // License type
+	FullLicenseText string `toml:"license-full"`  // full text of license, included in component description
+	Implementations []ComponentImplementation `toml:"implementation"`
 }
 
 // ComponentImplementation describes the properties of an implementation of a component.
 // In addition to metadata it also contains the components, it depends on, the dependencies.
 type ComponentImplementation struct {
-	Architecture string
-	OS           string
-	Location     string // download Url tgz
-	Command      string
-	Environment  []string
-	Dependencies []ImplementationDependency
+	Architecture string `toml:"architecture"`
+	OS           string `toml:"operating-system"`
+	Location     string `toml:"archive-download-location"` // download Url tgz
+	Command      string `toml:"start-local-command"`
+	Environment  []string `toml:"environment-settings"`
+	Dependencies []ImplementationDependency `toml:"dependency"`
 }
 
 // A dependency describes on which other components an implementation of a component depends on.
 // There is a version constraint, which says which range of versions is acceptable for the implementation.
 type ImplementationDependency struct {
-	Id                string
-	Environment       []string
+	Id                string `toml:"id-url"`
+	Environment       []string `toml:"environment-settings"`
 }
 
 // routines to manage components
@@ -1035,7 +1036,7 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 					log.Fatal("wrong relative path given: ", fs[2], err)
 				}
 				val = val1
-			} else if fs[0] == "add-val" {
+			} else if fs[0] == "set-value" {
 				val = fs[2]
 			} else {
 				log.Fatal("wrong command in setting: ", fs[0])
@@ -1144,8 +1145,6 @@ func showComponentInfo(cmd string, db AliasDB) {
 //	fmt.Printf("%+v", aif)
 
 	println("Component Info on:", aif.Id, "\n")
-	println("Purpose:")
-	println(aif.Purpose, "\n")
 	println("Description:")
 	println(aif.Description, "\n")
 	println("License:")
