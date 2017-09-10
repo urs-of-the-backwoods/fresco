@@ -50,19 +50,19 @@ import (
 // version
 //
 
-var version_aio = "0.2.2"
+var version_aio = "0.3.0"
 
 // version remarks
-// 0.2.2
-//	  new names for all the sections, to make arriccio.toml files clearer
-//
-// 0.2.0
-//	  removed all version checks, simplified config file
-//	  one ssh key for all downloads of one package
+// 0.1 initial version, including semantic version range mechanism 
+// 0.2 removed semantic version range mechanism
+// 0.3 changed toml keys to more descriptive ones
+
 
 //
-// General helper routines
+// single routines
 //
+
+// using a global for the http client, this is called once in main
 
 func createClient() *http.Client {
 	tr := &http.Transport{
@@ -72,10 +72,11 @@ func createClient() *http.Client {
 	return client
 }
 
-// global client
 var httpClient *http.Client
 
-// isUrlValid checks if url is a valid one, only check http:
+
+// checks and house keeping
+
 func isUrlValid(url string) bool {
 	return len(url) >= 5 && url[:5] == "http:" && govalidator.IsURL(url)
 }
@@ -89,19 +90,16 @@ func checkNameUrl(cmd string, db AliasDB) {
 	}
 	log.Fatal("need <url> or <name> not: ", cmd)
 }
-// isLocalDirValid checks if the path is pointing to a directory.
-// It returns the absolute path to that dir and a success indicator (bool).
+
 func isLocalDirValid(dir string) (string, bool) {
 	src, err := os.Stat(dir)
 	if err == nil {
 		abspath, _ := filepath.Abs(dir)
 		return abspath, src.IsDir()
 	}
-	return dir, false
+	return dir, false  // returns the absolute path and a success indicator (bool).
 }
 
-// getUserHomeDir gives back the home directory of the user.
-// It should work in all targeted os.
 func getUserHomeDir() string {
 	if runtime.GOOS == "windows" {
 		home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
@@ -113,113 +111,70 @@ func getUserHomeDir() string {
 	return os.Getenv("HOME")
 }
 
-// matchArchAndOs compares a give os and architecture string with the values 
-// obtained from platform at runtime and returns true if they match.
 func matchArchAndOs(arch string, os string) bool {
-	// architecture can be 386, amd64, amd64p32, ppc64 or arm
-	// os can be darwin, freebsd, linux, windows
-//	println("match os, target: ", os, " runtime: ", runtime.GOOS)
-//	println("match arch, target: ", arch, " runtime: ", runtime.GOARCH)
-	return (arch == "*" || arch == runtime.GOARCH) && 
-		   (os == "*" || os == runtime.GOOS)
+	return (arch == "*" || arch == runtime.GOARCH) &&  // GOARCH can be 386, amd64, amd64p32, ppc64 or arm
+		   (os == "*" || os == runtime.GOOS)           // GOOS can be darwin, freebsd, linux, windows
 }
 
-// extractTarGzFile extracts a gzipped tar file into output directory.
+
+// file utilities
+
 func extractTarGzFile(sourcefile string, outdir string) {
 
+        if sourcefile == "" { log.Fatal("extract tgz file: empty filename") }
+        file, err := os.Open(sourcefile)
+        if err != nil  { log.Fatal(fmt.Sprintln(err)) }
+        defer file.Close()
+
+        var fileReader io.ReadCloser = file
+        if fileReader, err = gzip.NewReader(file); err != nil { log.Fatal(fmt.Sprintln(err)) }
+        defer fileReader.Close()
+
+        tarBallReader := tar.NewReader(fileReader)
+
 		os.MkdirAll(outdir, 0770)
-//		 println("extract tar gz file: ", sourcefile)
 
-         if sourcefile == "" {
-                 log.Fatal("extract tgz file: empty filename")
-         }
+        for {
+            header, err := tarBallReader.Next()
+            if err != nil {
+                    if err == io.EOF {
+                            break
+                    }
+                    fmt.Println(err)
+                    os.Exit(1)
+            }
 
-         file, err := os.Open(sourcefile)
+            filename := filepath.Join(outdir, header.Name)
 
-         if err != nil {
-                 fmt.Println(err)
-                 os.Exit(1)
-         }
+			switch header.Typeflag {
 
-         defer file.Close()
+				case tar.TypeDir:
+				     err = os.MkdirAll(filename, os.FileMode(header.Mode)) // or use 0755 if you prefer
+				     if err != nil { log.Fatal(fmt.Sprintln(err)) }
 
-         var fileReader io.ReadCloser = file
+				case tar.TypeReg:
+				     writer, err := os.Create(filename)
+				     if err != nil { log.Fatal(fmt.Sprintln(err)) }
+				     io.Copy(writer, tarBallReader)
+				     err = os.Chmod(filename, os.FileMode(header.Mode))
+				     if err != nil { log.Fatal(fmt.Sprintln(err)) }
+				     writer.Close()
 
-         // add a filter to handle gzipped file
-         if fileReader, err = gzip.NewReader(file); err != nil {
+				case tar.TypeLink:
+					dest := filepath.Join(outdir, header.Linkname)
+					if err := os.Link(dest, filename); err != nil {
+		               	log.Fatal(fmt.Sprintf("error in untar type : %c in file %s", header.Typeflag, filename))
+					}
 
-                 fmt.Println(err)
-                 os.Exit(1)
-         }
-         defer fileReader.Close()
+				case tar.TypeSymlink:
+					if err := os.Symlink(header.Linkname, filename); err != nil {
+		               	log.Fatal(fmt.Sprintf("error in untar type : %c in file %s", header.Typeflag, filename))
+					}
 
-         tarBallReader := tar.NewReader(fileReader)
-
-         // Extracting tarred files
-
-         for {
-                 header, err := tarBallReader.Next()
-                 if err != nil {
-                         if err == io.EOF {
-                                 break
-                         }
-                         fmt.Println(err)
-                         os.Exit(1)
-                 }
-
-                 // get the individual filename and extract to the current directory
-                 filename := filepath.Join(outdir, header.Name)
-
-                 switch header.Typeflag {
-                 case tar.TypeDir:
-                         // handle directory
-//                         fmt.Println("Creating directory :", filename)
-                         err = os.MkdirAll(filename, os.FileMode(header.Mode)) // or use 0755 if you prefer
-
-                         if err != nil {
-                                 fmt.Println(err)
-                                 os.Exit(1)
-                         }
-
-                 case tar.TypeReg:
-                         // handle normal file
-//                         fmt.Println("Untarring :", filename)
-                         writer, err := os.Create(filename)
-
-                         if err != nil {
-                                 fmt.Println(err)
-                                 os.Exit(1)
-                         }
-
-                         io.Copy(writer, tarBallReader)
-
-                         err = os.Chmod(filename, os.FileMode(header.Mode))
-
-                         if err != nil {
-                                 fmt.Println(err)
-                                 os.Exit(1)
-                         }
-
-                         writer.Close()
-
-		case tar.TypeLink:
-			dest := filepath.Join(outdir, header.Linkname)
-			if err := os.Link(dest, filename); err != nil {
-                         	fmt.Printf("error in untar type : %c in file %s", header.Typeflag, filename)
-				return 
-			}
-
-		case tar.TypeSymlink:
-			if err := os.Symlink(header.Linkname, filename); err != nil {
-                         	fmt.Printf("error in untar type : %c in file %s", header.Typeflag, filename)
-				return 
-		}
-
-                 default:
-                         fmt.Printf("Unable to untar type : %c in file %s", header.Typeflag, filename)
-                 }
-         }
-
+                default:
+                    log.Fatal(fmt.Printf("Unable to untar type : %c in file %s", header.Typeflag, filename))
+            }
+        }
 }
 
 func compileHash(fname string) []byte {
@@ -287,8 +242,6 @@ func readSignature(fname string) ssh.Signature {
     return sig
 } 
 
-
-// loadPrivateKey loads an parses a PEM encoded private key file.
 func loadPublicKey(path string) ssh.PublicKey {
 
     bs, err := ioutil.ReadFile(path)
@@ -302,8 +255,6 @@ func loadPublicKey(path string) ssh.PublicKey {
     return rsa
 }
 
-
-// loadPrivateKey loads an parses a PEM encoded private key file.
 func loadPrivateKey(path string) ssh.Signer {
     bs, err := ioutil.ReadFile(path)
     if err != nil {
@@ -317,27 +268,20 @@ func loadPrivateKey(path string) ssh.Signer {
 }
 
 
-
-
 //
 // main function
 //
 
-
-// Main entry point of arriccio tool.
-// Fulfills two purposes: manages the database of aliases and local url substitutes and
-// runs a command with dependency injection from configuration files (arriccio.toml).
 func main() {
 
 	db := readAliasDB()
 	httpClient = createClient()
 
 	if len(os.Args) == 1 {
-		// give help
 		println("\naio (arriccio, all in one) command:\n")
 		println("  aio alias <name> <url>           - gives an alias to a target url")
 		println("  aio list alias                   - list given alias")
-		println("  aio remove-alias <name> <url>    - removes an alias")
+		println("  aio remove-alias <name>          - removes an alias")
 		println("")
 		println("  aio local <url> <local-dir>      - caches a local implementation dir for a target url")
 		println("  aio list local                   - list given local dirs")
@@ -359,16 +303,14 @@ func main() {
 		println("")
 	} else {
 
-		// command processing
-
 		switch os.Args[1] {
 
 		case "version":
 			{
 				println("aio version " + version_aio + " running on", runtime.GOARCH + "-" + runtime.GOOS);
 			}
+
 		// aio alias <name> <url>
-		// aio remove-alias <name>
 		case "alias":
 			{
 				if len(os.Args) == 4 {
@@ -383,6 +325,8 @@ func main() {
 					log.Fatal("alias needs two parameters: aio alias <name> <url>")
 				}
 			}
+
+		// aio remove-alias <name>
 		case "remove-alias":
 			{
 				if len(os.Args) == 3 {
@@ -393,8 +337,7 @@ func main() {
 			    }
 			}
 
-			// aio local <url> local-dir
-			// aio remove-local <url>
+		// aio local <url> local-dir
 		case "local":
 			{
 				if len(os.Args) == 4 {
@@ -414,6 +357,8 @@ func main() {
 					log.Fatal("local needs two parameters: aio local <url> <local-dir>")
 				}
 			}
+
+		// aio remove-local <url>
 		case "remove-local":
 			{
 				if len(os.Args) == 3 {
@@ -493,6 +438,7 @@ func main() {
 				}
 			}
 
+		// aio info <name | url>
 		case "info":
 			{
 				if len(os.Args) == 3 {
@@ -503,6 +449,7 @@ func main() {
 				}
 			}
 
+		// aio license <name | url>
 		case "license":
 			{
 				if len(os.Args) == 3 {
@@ -522,7 +469,7 @@ func main() {
 				log.Fatal("start needs one parameter, aio start <name | url>")
 			}
 
-		// aio start <name | url>
+		// aio update <name | url>
 		case "update":
 			if len(os.Args) == 3 {
 				checkNameUrl(os.Args[2], db)
@@ -553,7 +500,6 @@ func getArriccioDir() string {
 	dir := getUserHomeDir()
 	arrdir := filepath.Join(dir, ".aio")
 	_, ok := isLocalDirValid(arrdir)
-	//	println("getArriccioDir: ", arrdir, ok)
 	if !ok {
 		os.MkdirAll(arrdir, 0770)
 		os.MkdirAll(filepath.Join(arrdir, "cache"), 0770)
@@ -562,10 +508,7 @@ func getArriccioDir() string {
 	return arrdir
 }
 
-//		fname, isCached := checkUrlIsChached(el.impl.Location)
-
 func checkUrlIsCached(url string) (string, bool) {
-	// check if file is in cache
 	cdir := filepath.Join(getArriccioDir(), "cache")
 	h := ripemd160.New()
 	h.Write([]byte(url))
@@ -576,7 +519,6 @@ func checkUrlIsCached(url string) (string, bool) {
 }	
 
 func getImplFName(fname string) string {
-	// get filename from path
 	base := filepath.Base(fname)
 	idir :=  filepath.Join(getArriccioDir(), "impl")
 	iname := filepath.Join(idir, base) + ".i"
@@ -584,7 +526,6 @@ func getImplFName(fname string) string {
 }
 
 func getUrlAsCachedFile(urln string, update bool) (string, bool) {
-	// check if file is in cache
 	fname, isCached := checkUrlIsCached(urln)
 	if update || !isCached {
 		// download
@@ -606,9 +547,7 @@ func getUrlAsCachedFile(urln string, update bool) (string, bool) {
 		} else {
 			log.Fatal("cannot open url: ", urln)
 		}
-	} else {
-//		println("take file from cache: ", fname)
-	}
+	} 
 	abs, _ := filepath.Abs(fname)
 	return abs, isCached
 }
@@ -696,19 +635,9 @@ func writeAliasDB(db AliasDB) {
 //
 // Run a command with dependency injection 
 //
-// main complexity of arriccio command
-// contains:
-//	data format for dependency description
-//  mechanism to read those descriptions from file or url
-//  mechanism to resolve dependencies from multiple implementation options
-//  mechanism to finally run the program with all required dependencies
-//
 
-//
-// Components
-//
+// Data definitions for components, implementations and dependencies, this data is being configured in TOML files
 
-// Components describe some functionality or data. They can be implemented for different platforms, os.
 type Component struct {
 	Id          string `toml:"id-url"` // Url as id
 	Description string `toml:"description"` // description
@@ -718,8 +647,6 @@ type Component struct {
 	Implementations []ComponentImplementation `toml:"implementation"`
 }
 
-// ComponentImplementation describes the properties of an implementation of a component.
-// In addition to metadata it also contains the components, it depends on, the dependencies.
 type ComponentImplementation struct {
 	Architecture string `toml:"architecture"`
 	OS           string `toml:"operating-system"`
@@ -729,8 +656,6 @@ type ComponentImplementation struct {
 	Dependencies []ImplementationDependency `toml:"dependency"`
 }
 
-// A dependency describes on which other components an implementation of a component depends on.
-// There is a version constraint, which says which range of versions is acceptable for the implementation.
 type ImplementationDependency struct {
 	Id                string `toml:"id-url"`
 	Environment       []string `toml:"environment-settings"`
@@ -892,7 +817,6 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []ImplementationDepende
 				// see if directory exists
 				fdir := filepath.Join(ifloc, dname)
 				abs, ok := isLocalDirValid(fdir)
-//				println(fdir, " ", abs, " ", ok)
 				if ok {
 					location = abs
 				}
@@ -1010,7 +934,7 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 	// possible commands
 	//
 	// add-path ENVVAR rel-path [sep]
-	// add-val ENVVAR val [sep]
+	// set-value ENVVAR val [sep]
 	//
 
 	// create map
@@ -1053,8 +977,6 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 				m[strings.ToUpper(fs[1])] = val
 			}
 
-//			println("changed env: ", fs[1])
-//			println("value: ", m[fs[1]])
 		} else {
 			log.Fatal("wrong number of arguments in setting: ", s)			
 		}
@@ -1102,14 +1024,6 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 		}
 	}	
 
-/*
-	print(binary)
-	for _,a := range arglist {
-		print(" ", a)
-	}
-	println()
-*/
-	
 	// if binary still empty, take first argument as binary
 	if binary == "" && len(arglist) > 0 {
 		binary = arglist[0] 
@@ -1126,8 +1040,6 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	    cmd.Stdin = os.Stdin
 		cmd.Run()
 	} else {
-//		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-//		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: false}
 		cmd.Start()
 	}
 }
@@ -1160,7 +1072,6 @@ func showLicenseInfo(cmd string, db AliasDB) {
 		url = val
 	}
 
-	// resolve dependencies
 	ok, rlist := resolveDependencies(db, url, []ImplementationDependency{}, false)
 	if !ok {
 		log.Fatal("Could not resolve dependencies for license info on:", url)
@@ -1178,8 +1089,6 @@ func showLicenseInfo(cmd string, db AliasDB) {
 		println(ri.comp.FullLicenseText, "\n")
 	}
 }
-
-// aio run <name | url>, cmd = <name | url>
 
 func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args []string, debug bool, unsafe bool, console bool, update bool) {
 
