@@ -123,7 +123,7 @@ getReaderDef bt = case bt of
     BT_LT a -> \t -> readEnterContainer <>
                      "  size_t l; cbor_value_get_array_length(it, &l); \n" <>
                      "  " <> t <> ".clear();\n" <>
-                     "  for (int i = 0; i < l; i++) { " <> 
+                     "  while (!cbor_value_at_end(it)) { " <> 
                      "  " <> bT' a <> " item; " <> getReaderDef a "item" <> "; " <> t <> ".push_back(item); } \n" <>  
                      readLeaveContainer
 
