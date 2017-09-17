@@ -11,7 +11,7 @@ local function aioString()
 	if o == "windows" then
 		return  glue.bin .. "\\win\\aio.exe"	
 	elseif o == "darwin" then
-		return glue.bin .. "/mac/aio"	
+		return glue.bin .. "/darwin/aio"	
 	elseif o == "linux" then
 		return glue.bin .. "/linux/aio"	
 	end
