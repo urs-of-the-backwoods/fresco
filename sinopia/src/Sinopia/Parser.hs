@@ -48,6 +48,13 @@ identifier = do
     spc
     return $ pack (c: t)
 
+identifierP :: Parser Text
+identifierP = do
+    c <- letter
+    t <- many' (letter <|> digit <|> char '.')
+    spc
+    return $ pack (c: t)
+
 symbol :: Text -> Parser ()
 symbol c = do
     v <- string c
@@ -143,7 +150,7 @@ parseST = do
 parseNS :: Parser Namespace
 parseNS = do
     rword "namespace" 
-    a <- identifier
+    a <- identifierP
     return (Namespace a)
 
 parseIM :: Parser Import

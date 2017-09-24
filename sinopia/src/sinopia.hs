@@ -39,6 +39,7 @@ data Options = Options  { optVerbose    :: Bool
                         , optOutput     :: T.Text -> IO ()
                         , optFilter     :: [TopLevelType] -> T.Text
                         , optName       :: T.Text
+                        , optModule     :: T.Text
                         }
 
 startOptions :: Options
@@ -47,6 +48,7 @@ startOptions = Options  { optVerbose    = False
                         , optOutput     = T.putStr
                         , optFilter     = showTLT
                         , optName       = ""
+                        , optModule       = ""
                         }
 
 options :: [ OptDescr (Options -> IO Options) ]
@@ -74,6 +76,13 @@ options =
             (\arg opt -> return opt { optName = (T.pack arg) })
             "<string>")
         "Filename String"
+
+
+    , Option "m" ["string"]
+        (ReqArg
+            (\arg opt -> return opt { optModule = (T.pack arg) })
+            "<string>")
+        "Module String"
 
     , Option "g" ["generate"]
         (ReqArg

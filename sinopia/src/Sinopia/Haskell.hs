@@ -101,14 +101,23 @@ serDef' _ t = case t of
 
 nsEnd' = ""
 
-headDef' _ _ t = "import Fresco\n" <>
-    "import Data.Binary.Serialise.CBOR\n" <>
-    "import Data.Binary.Serialise.CBOR.Encoding\n" <>
-    "import Data.Binary.Serialise.CBOR.Decoding\n\n" <>
+headDef' _ f t = let 
+    fi l = filter (\v -> case v of 
+                        TL_NS _ -> True
+                        _ -> False) l 
+    mod = case fi t of
+            ( TL_NS (Namespace n) : _) -> "module " <> n <> "\nwhere\n\n"
+            [] -> ""
+    in
+        mod <>
+        "import Fresco\n" <>
+        "import Data.Binary.Serialise.CBOR\n" <>
+        "import Data.Binary.Serialise.CBOR.Encoding\n" <>
+        "import Data.Binary.Serialise.CBOR.Decoding\n\n" <>
 
-    "import Data.Text\n" <>
-    "import Data.Monoid\n" <>
-    "import Control.Applicative\n\n"
+        "import Data.Text\n" <>
+        "import Data.Monoid\n" <>
+        "import Control.Applicative\n\n"
 
 footDef' _ _ = ""
 
