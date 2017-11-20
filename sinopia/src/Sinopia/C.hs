@@ -59,23 +59,23 @@ bT' = \t -> case t of
 typeDef' :: Bool -> TopLevelType -> T.Text
 typeDef' defOnly t = if defOnly 
     then case t of
-        TL_ET e@(EnumType en fs) -> enumEnumDef en fs <> enumStructDef en fs where
+        TL_ET e@(EnumType en fs _) -> enumEnumDef en fs <> enumStructDef en fs where
             enumEnumDef en fs = "typedef enum {\n" <> enumEnumFields en fs <> "} Enum" <> tN' t <> ";\n\n"
             enumEnumFields en fs = T.concat (L.map (enumEnumField en) (zip fs [0..]))
-            enumEnumField en (EnumField n ts, i) = "    " <> enumElemN' en n <> " = " <> (T.pack (show i)) <> ",\n"
+            enumEnumField en (EnumField n ts _, i) = "    " <> enumElemN' en n <> " = " <> (T.pack (show i)) <> ",\n"
 
             enumStructDef en fs = "typedef struct {\n    " <> "Enum" <> tN' t <> " selector;\n" <> enumStructUnion en fs <> "} " <> tN' t <> ";\n\n"
             enumStructUnion en fs = "    struct {\n" <> enumStructFields en fs <> "    } data;\n"
             enumStructFields en fs = T.concat (L.map (enumStructField en) fs)
-            enumStructField en (EnumField cn bts) = "        struct {\n" <> esfTypes bts <> "        } " <> cn <>";\n"
+            enumStructField en (EnumField cn bts _) = "        struct {\n" <> esfTypes bts <> "        } " <> cn <>";\n"
             esfTypes bts = T.concat (L.map esfType (zip [0..] bts))
             esfType (i, bt) = "            " <> bT' bt <> " value" <> (T.pack (show i)) <> ";\n"
         
-        TL_ST s@(StructType sn fs) -> "typedef struct {\n" <> structStructFields sn fs <> "} " <> tN' t <> ";\n\n" where
+        TL_ST s@(StructType sn fs _) -> "typedef struct {\n" <> structStructFields sn fs <> "} " <> tN' t <> ";\n\n" where
             structStructFields sn fs = T.concat (L.map (structStructField sn) fs)
-            structStructField sn (StructField cn bt) = "    " <> bT' bt <> " " <> cn <> ";\n"
+            structStructField sn (StructField cn bt _) = "    " <> bT' bt <> " " <> cn <> ";\n"
 
-        TL_TD (TypeDeclaration tn bt) -> "typedef " <> bT' bt <> " " <> tN' t <> ";\n\n"
+        TL_TD (TypeDeclaration tn bt _) -> "typedef " <> bT' bt <> " " <> tN' t <> ";\n\n"
         _ -> ""
     else case t of
         _ -> ""
@@ -170,45 +170,45 @@ serDef' defOnly t = let
             then case t of
                 TL_ET _ -> functionHeaders
                 TL_ST _ -> functionHeaders
-                TL_TD (TypeDeclaration tn bt) -> functionHeaders
+                TL_TD (TypeDeclaration tn bt _) -> functionHeaders
                 _ -> ""
 
             else case t of
-                TL_ET e@(EnumType tn fs) -> functions readBody writeBody where
+                TL_ET e@(EnumType tn fs _) -> functions readBody writeBody where
                     readBody = readEnterContainer <> readSelector <> readFElems <> readLeaveContainer
                     readSelector = "int i; cbor_value_get_int(it, &i); cbor_value_advance_fixed(it);\n    " 
                                    <> sN <> "->selector = (Enum" <> tnt <> ")i;\n"
                     readFElems = T.concat (map readFElem (zip [0..] fs))
-                    readFElem (i, e@(EnumField cn bts)) = "    if (" <> sN <> "->selector == " <> (T.pack (show i)) <> ") {\n" <> T.concat (map (readFBt t cn) (zip [0..] bts)) <> "    };\n"
+                    readFElem (i, e@(EnumField cn bts _)) = "    if (" <> sN <> "->selector == " <> (T.pack (show i)) <> ") {\n" <> T.concat (map (readFBt t cn) (zip [0..] bts)) <> "    };\n"
                     readFBt t cn (n, bt) =  "        " <> ((getReaderDef bt) (sN <> "->data." <> cn <> ".value" <> (T.pack (show n))))
 
 
                     writeBody = T.concat (map writeFElem (zip [0..] fs))
-                    writeFElem (i, e@(EnumField cn bts)) = writeFElemHead i <> writeEnterContainer ((length bts) + 1) <> writeFElemNum sN <> 
+                    writeFElem (i, e@(EnumField cn bts _)) = writeFElemHead i <> writeEnterContainer ((length bts) + 1) <> writeFElemNum sN <> 
                                                            writeFElemFBs t cn bts <> writeLeaveContainer 
                     writeFElemHead i = "    if (" <> sN <> ".selector == " <> (T.pack (show i)) <> ") \n"
                     writeFElemNum sN = "        cbor_encode_uint(enc, (uint64_t)" <> sN <> ".selector);\n"
                     writeFElemFBs t cn bts = T.concat (map (writeFBt t cn) (zip [0..] bts))
                     writeFBt t cn (n, bt) =  "        " <> ((getWriterDef bt) (sN <> ".data." <> cn <> ".value" <> (T.pack (show n))))
 
-                TL_ST s@(StructType tn fs) -> functions readBody writeBody where
+                TL_ST s@(StructType tn fs _) -> functions readBody writeBody where
                     readBody = readEnterContainer <> readFElems <> readLeaveContainer
                     readFElems = T.concat (map readFElem fs)
-                    readFElem f@(StructField cn bt) = "    " <> ((getReaderDef bt) (sN <> "->" <> cn))
+                    readFElem f@(StructField cn bt _) = "    " <> ((getReaderDef bt) (sN <> "->" <> cn))
 
                     writeBody = writeEnterContainer (length fs) <> writeFElems <> writeLeaveContainer
                     writeFElems = T.concat (map writeFElem fs)
-                    writeFElem s@(StructField cn bt) = writeFBt t cn bt
+                    writeFElem s@(StructField cn bt _) = writeFBt t cn bt
                     writeFBt t cn bt =  "    " <> ((getWriterDef bt) (sN <> "." <> cn ))
 
-                TL_TD (TypeDeclaration tn bt) ->  readFunction readBody <> writeFunction writeBody where
+                TL_TD (TypeDeclaration tn bt _) ->  readFunction readBody <> writeFunction writeBody where
                     readBody = "    " <> bT' bt <> " rval;\n    " <> ((getReaderDef bt) "rval") <> "    *" <> sN <> " = rval;\n"
                     writeBody =  "    " <> ((getWriterDef bt) sN)
                 _ -> ""
 
 
-headDef' :: Bool -> T.Text -> [TopLevelType] -> T.Text
-headDef' defOnly fname ts = if defOnly 
+headDef' :: Bool -> T.Text -> T.Text -> [TopLevelType] -> T.Text
+headDef' defOnly fname mname ts = if defOnly 
     then -- header
         if T.length fname > 0
             then includeHead fname <> includes <> otherIncludes <> addNamespace

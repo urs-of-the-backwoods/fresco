@@ -26,15 +26,20 @@ import Sinopia.Data
 
 -- Tokenizer definition
 
-cmnt :: Parser ()
-cmnt = char '#' >> takeTill isEndOfLine >> return ()
+cmnt :: Parser [Text]
+cmnt = many1 (( char '#' 
+                <|> (char '/' >> char '/')
+                    ) >> spc >> do
+                            l <- takeTill isEndOfLine
+                            spc
+                            return l)
 
 spc' :: Parser ()
-spc' = many' ( (space >> return ()) <|> cmnt) >> return ()
+spc' = many' ( space >> return () ) >> return ()
 
 spc :: Parser ()
 spc = 
-        (many1 ( (space >> return ()) <|> cmnt) >> return ())
+        (many1 ( (space >> return ()) ) >> return ())
     <|> do
             c <- peekChar
             case c of
@@ -123,14 +128,16 @@ parseEnumField = do
         n <- identifier
         ts <- many' parseBT
         semicolon
-        return (EnumField n ts)
+        c <- option Nothing (Just <$> cmnt)
+        return (EnumField n ts c)
 
 parseET :: Parser EnumType
 parseET = do
+        c <- option Nothing (Just <$> cmnt)
         rword "enum"
         n <- identifier
         values <- braces (many1 parseEnumField)
-        return (EnumType n values)
+        return (EnumType n values c)
 
 parseStructField :: Parser StructField
 parseStructField = do
@@ -138,20 +145,16 @@ parseStructField = do
         colon
         t <- parseBT
         semicolon
-        return (StructField n t)
+        c <- option Nothing (Just <$> cmnt)
+        return (StructField n t c)
 
 parseST :: Parser StructType
 parseST = do
+        c <- option Nothing (Just <$> cmnt)
         rword "struct"
         n <- identifier
         fs <- braces $ many1 parseStructField
-        return (StructType n fs)
-
-parseNS :: Parser Namespace
-parseNS = do
-    rword "namespace" 
-    a <- identifierP
-    return (Namespace a)
+        return (StructType n fs c)
 
 parseIM :: Parser Import
 parseIM = do
@@ -162,16 +165,16 @@ parseIM = do
 
 parseTD :: Parser TypeDeclaration
 parseTD = do
+    c <- option Nothing (Just <$> cmnt)
     rword "type"
     td <- identifier
     equals
     tn <- parseBT
-    return (TypeDeclaration td tn)
+    return (TypeDeclaration td tn c)
 
 parseTL :: Parser TopLevelType
 parseTL = do
         (parseIM >>= \v -> return (TL_IM v))
-    <|> (parseNS >>= \v -> return (TL_NS v))
     <|> (parseTD >>= \v -> return (TL_TD v))
     <|> (parseId64 >>= \v -> return (TL_ID v))
     <|> (parseST >>= \v -> return (TL_ST v))

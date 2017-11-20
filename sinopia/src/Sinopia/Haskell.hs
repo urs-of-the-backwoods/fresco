@@ -55,38 +55,49 @@ bT' = \t -> case t of
     BT_TN n -> n
 --    _ -> error "Unknown Base Type in hBType!"
 
+cmdDef :: Maybe [T.Text] -> T.Text
+cmdDef mt = case mt of 
+    Nothing -> ""
+    Just (t : ts) -> "-- | " <> t <> "\n" <> (T.concat (map (\t' -> "-- " <> t' <> "\n") ts))
+
+cmdDef' mt = let
+    c = cmdDef mt
+    in if T.length c > 0 
+        then c <> "    "
+        else ""
+
 typeDef' :: Bool -> TopLevelType -> T.Text
 typeDef' _ t = case t of
-    TL_ET e@(EnumType en fs) -> "data " <> tN' t <> " = " <> enumFields en fs <> "    deriving (Eq, Read, Show)\n\n"
-    TL_ST s@(StructType sn fs) -> "data " <> tN' t <> " = " <> tN' t <> " {\n    " <> structFields sn fs <> "    } deriving (Eq, Read, Show)\n\n"
+    TL_ET e@(EnumType en fs c) -> cmdDef c <> "data " <> tN' t <> " = " <> enumFields en fs <> "    deriving (Eq, Read, Show)\n\n"
+    TL_ST s@(StructType sn fs c) -> cmdDef c <> "data " <> tN' t <> " = " <> tN' t <> " {\n    " <> structFields sn fs <> "    } deriving (Eq, Read, Show)\n\n"
     TL_ID (Id64 tn i) -> "ct" <> tN' t <> " :: ComponentType " <> tN' t <> "\n"
                          <> "ct" <> tN' t <> " = ComponentType 0x" <> (T.pack (showHex i "")) <> "\n\n"
-    TL_TD (TypeDeclaration tn bt) -> "type " <> tN' t <> " = " <> bT' bt <> "\n\n"
+    TL_TD (TypeDeclaration tn bt c) -> cmdDef c <> "type " <> tN' t <> " = " <> bT' bt <> "\n\n"
     _ -> ""
     where
-      enumFields en fs = T.concat (L.intersperse ("\n    | ") (map (\ef@(EnumField cn bts) -> 
+      enumFields en fs = T.concat (L.intersperse ("\n    | ") (map (\ef@(EnumField cn bts _) -> 
         enumElemN' en cn <> (foldl (\b bt -> b <> " " <> (bT' bt)) "" bts)) fs)) <> "\n"
-      structFields sn fs = T.concat (L.intersperse (",\n    ") (map (\sf@(StructField en bt) ->
-        structElemN' sn en <> "::" <> bT' bt) fs)) <> "\n"
+      structFields sn fs = T.concat (L.intersperse (",\n    ") (map (\sf@(StructField en bt c) ->
+        cmdDef' c <> structElemN' sn en <> "::" <> bT' bt) fs)) <> "\n"
 
 serDef' _ t = case t of
-    TL_ET e@(EnumType tn fs) -> "instance Serialise " <> tN' t <> " where\n" <>
+    TL_ET e@(EnumType tn fs _) -> "instance Serialise " <> tN' t <> " where\n" <>
                             eList tn fs <>
                             dList tn fs
                             where
                                 eList tn fs = T.concat (L.map fEncode (zip fs [0..]))
-                                fEncode ((EnumField n ts), i) = "    encode (" <> enumElemN' tn n <> tsEncodeL ts <>") = " <> arrRList ts <> " encode (" <> (T.pack . show) i <> "::Int) " <> tsEncodeR ts <> "\n"
+                                fEncode ((EnumField n ts _), i) = "    encode (" <> enumElemN' tn n <> tsEncodeL ts <>") = " <> arrRList ts <> " encode (" <> (T.pack . show) i <> "::Int) " <> tsEncodeR ts <> "\n"
                                 tsEncodeL ts = T.concat (map (\t -> " v" <> (T.pack . show) t) [1 .. length ts])
                                 arrRList ts = "encodeListLen " <> ((T.pack . show) ((length ts) + 1)) <> " <> " 
                                 tsEncodeR ts = T.concat (map (\t -> "<> encode v" <> (T.pack . show) t) [1 .. length ts])
                                 dList tn fs = decodeHead <> T.concat (L.map fDecode (zip fs [0..])) <> "\n"
                                 decodeHead = "    decode = do\n        decodeListLen\n        i <- decode :: Decoder s Int\n        case i of\n"
-                                fDecode ((EnumField n ts), i) = "            " <> ((T.pack .show) i)<> " -> (" <> decodeR n ts <> ")\n"
+                                fDecode ((EnumField n ts _), i) = "            " <> ((T.pack .show) i)<> " -> (" <> decodeR n ts <> ")\n"
                                 decodeR n ts = if length ts == 0 
                                                     then "pure " <> enumElemN' tn n
                                                     else enumElemN' tn n <> " <$> " <> T.concat (L.intersperse " <*> " (map (const "decode") [1..length ts]))
 
-    TL_ST s@(StructType _ fs) -> "instance Serialise " <> tN' t <> " where\n" <>
+    TL_ST s@(StructType _ fs _) -> "instance Serialise " <> tN' t <> " where\n" <>
                             "    encode (" <> tN' t <> vLList <> ") = " <> arrRList <> vRList <> "\n" <>
                             "    decode = decodeListLenOf " <> ((T.pack . show) (length fs)) <> " >> " <> tN' t <> " <$> " <> dList <> "\n\n"
                             where
@@ -101,13 +112,10 @@ serDef' _ t = case t of
 
 nsEnd' = ""
 
-headDef' _ f t = let 
-    fi l = filter (\v -> case v of 
-                        TL_NS _ -> True
-                        _ -> False) l 
-    mod = case fi t of
-            ( TL_NS (Namespace n) : _) -> "module " <> n <> "\nwhere\n\n"
-            [] -> ""
+headDef' _ f m t = let 
+    mod = if T.length m > 0 && T.length f > 0
+        then "module " <> m <> "." <> f <> "\nwhere\n\n"
+        else ""
     in
         mod <>
         "import Fresco\n" <>

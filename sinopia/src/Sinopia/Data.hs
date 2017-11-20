@@ -20,8 +20,8 @@ import qualified Data.Text as T
 
 type TypeName = T.Text
 type FieldName = T.Text
-type NamespaceName = T.Text
 type ImportName = T.Text
+type Comment = [T.Text]
 
 data Primitive = PT_Bool | PT_Null
                     | PT_Int8 | PT_Int16 | PT_Int32 | PT_Int64 
@@ -36,32 +36,28 @@ data BaseType = BT_PT Primitive
                 | BT_LT BaseType
                 deriving (Show, Read, Eq)
 
-data EnumField = EnumField FieldName [BaseType]        
+data EnumField = EnumField FieldName [BaseType] (Maybe Comment)        
               deriving (Show, Read, Eq)
 
-data EnumType = EnumType TypeName [EnumField]
+data EnumType = EnumType TypeName [EnumField] (Maybe Comment)
                     deriving (Show, Read, Eq)
 
-data StructField = StructField FieldName BaseType      
+data StructField = StructField FieldName BaseType (Maybe Comment)      
               deriving (Show, Read, Eq)
 
-data StructType = StructType TypeName [StructField]
-                    deriving (Show, Read, Eq)
-
-data Namespace = Namespace NamespaceName
+data StructType = StructType TypeName [StructField] (Maybe Comment)
                     deriving (Show, Read, Eq)
 
 data Import = Import ImportName W.Word64
                     deriving (Show, Read, Eq)
 
-data TypeDeclaration = TypeDeclaration TypeName BaseType
+data TypeDeclaration = TypeDeclaration TypeName BaseType (Maybe Comment)
                     deriving (Show, Read, Eq)
 
 data Id64 = Id64 TypeName W.Word64
                     deriving (Show, Read, Eq)
 
-data TopLevelType = TL_NS Namespace
-                    | TL_IM Import
+data TopLevelType = TL_IM Import
                     | TL_TD TypeDeclaration
                     | TL_ID Id64
                     | TL_ET EnumType
@@ -73,61 +69,29 @@ data TopLevelType = TL_NS Namespace
 
 typeName :: TopLevelType -> TypeName
 typeName tlt = case tlt of
-    TL_TD (TypeDeclaration tn _) -> tn
-    TL_ST (StructType tn _) -> tn
-    TL_ET (EnumType tn _) -> tn
+    TL_TD (TypeDeclaration tn _ _) -> tn
+    TL_ST (StructType tn _ _) -> tn
+    TL_ET (EnumType tn _ _) -> tn
     TL_ID (Id64 tn _) -> tn
     _ -> ""
 
--- 
--- Check Rules of Data Files
---
-
-{-
-
-There are two types of files:
-
-normal definition files:
-Rule 1: there need to be exactly one id64 declaration with the main type being stamped
-Rule 2: the structure being named with the id declaration needs to be in the file defined
-Rule 3: normal files should NOT have a namespace
-
-namespace declaration files:
-Rule 4: files with namespaces should only have additional import declararations, they simply set a namespace on the imported items below it
-
--}
-
 -- check of data structure
-
-isId (TL_ID _) = True
-isId _ = False
-
-isNS (TL_NS _) = True
-isNS _ = False
 
 isIm (TL_IM _) = True
 isIm _ = False
 
-isNameSpaceFile :: [TopLevelType] -> Bool
-isNameSpaceFile ast = length (filter isNS ast) > 0
+isTd (TL_TD _) = True
+isTd _ = False
 
-checkParsedData :: [TopLevelType] -> (Bool, T.Text)
-checkParsedData ast = 
-  case isNameSpaceFile ast of
-    False -> -- normal file, check rules 1 - 3 
-      let
-        ids = filter isId ast
-        names = map typeName ast
-        ns = filter isNS ast
-        in if length ids /= 1 
-          then (False, "one and only one id needed!")
-          else if not ((typeName (ids !! 0)) `elem` names)
-            then (False, "id type not defined!")
-            else (True, "normal file, parsed Ok")
-    True -> -- namespace file, check rule 4
-      let nIm = length (filter isIm ast)
-          nNS = length (filter isNS ast) 
-          in case (nIm + nNS) == (length ast) of
-               True -> (True, "namespace file, parsed Ok")
-               False -> (False, "namespace files should not contain other elements than Imports and Namespaces!")
+isId (TL_ID _) = True
+isId _ = False
+
+isEt (TL_ET _) = True
+isEt _ = False
+
+isSt (TL_ST _) = True
+isSt _ = False
+
+
+
 

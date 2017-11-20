@@ -27,6 +27,7 @@ import Sinopia.Parser
 import Sinopia.Util
 import Sinopia.Haskell
 import Sinopia.Rust
+import Sinopia.JavaScript
 import Sinopia.C
 
 -- Main Program
@@ -89,9 +90,10 @@ options =
             (\arg opt -> do
 --                print $ T.concat ["Hi: ", optName opt]
                 return opt { optFilter = case arg of
-                "Haskell" -> \l -> conversion hConvertible (optName opt) l
-                "C-cpp" -> \l -> conversion ciConvertible (optName opt) l -- implementation
-                "C-hpp" -> \l -> conversion cdConvertible (optName opt) l -- definition
+                "Haskell" -> \l -> conversion hConvertible (optName opt) (optModule opt) l
+                "JavaScript" -> \l -> conversion jsConvertible (optName opt) (optModule opt) l
+                "C-cpp" -> \l -> conversion ciConvertible (optName opt) (optModule opt) l -- implementation
+                "C-hpp" -> \l -> conversion cdConvertible (optName opt) (optModule opt) l -- definition
                 _ -> showTLT })
             "<language>")
         "Generator"
