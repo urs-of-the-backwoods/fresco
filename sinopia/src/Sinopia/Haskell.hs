@@ -13,7 +13,7 @@
 
 module Sinopia.Haskell 
 (
-    hConvertible
+  writeHaskellFile
 ) where
 
 import Sinopia.Data
@@ -28,15 +28,9 @@ import Numeric
 
 -- create output for Haskell
 
-tN' tlt = cap1 (typeName tlt)
-
-structElemN' :: TypeName -> FieldName -> T.Text
-structElemN' n fn = low1 n <> cap1 fn
-
-enumElemN' :: TypeName -> FieldName -> T.Text
-enumElemN' n fn = cap1 fn
-
-bT' = \t -> case t of
+-- haskell names of basetypes
+btToHt :: BaseType -> T.Text
+btToHt = \t -> case t of
     BT_PT PT_Null -> "()"    
     BT_PT PT_Bool -> "Bool"    
     BT_PT PT_Int8 -> "Int8"
@@ -51,42 +45,51 @@ bT' = \t -> case t of
     BT_PT PT_Float64 -> "Double"
     BT_PT PT_Text -> "Text"
     BT_PT PT_Data -> "ByteString"
-    BT_LT a -> "[" <> (bT' a) <> "]"
+    BT_LT a -> "[" <> (btToHt a) <> "]"
     BT_TN n -> n
---    _ -> error "Unknown Base Type in hBType!"
 
-cmdDef :: Maybe [T.Text] -> T.Text
-cmdDef mt = case mt of 
-    Nothing -> ""
-    Just (t : ts) -> "-- | " <> t <> "\n" <> (T.concat (map (\t' -> "-- " <> t' <> "\n") ts))
+--  haskell typedeclarations 
+tdToHt :: TypeDeclaration -> T.Text
+tdToHt td = case td of
 
-cmdDef' mt = let
-    c = cmdDef mt
-    in if T.length c > 0 
-        then c <> "    "
-        else ""
+  TD_TD (TypeDefinition tn bt mbCmt) -> cmt mbCmt <> "type " <> cap1 tn <> " = " <> btToHt bt <> "\n\n"
+  TD_ST (StructType tn sfs mbCmt) -> cmt mbCmt <> "data " <> cap1 tn <> " = " <> cap1 tn <> " {\n    " <> structFields tn sfs <> "    } deriving (Eq, Read, Show)\n\n"
+  TD_ET (EnumType tn efs mbCmt) -> cmt mbCmt <> "data " <> cap1 tn <> " = " <> enumFields efs <> "    deriving (Eq, Read, Show)\n\n"
 
-typeDef' :: Bool -> TopLevelType -> T.Text
-typeDef' _ t = case t of
-    TL_ET e@(EnumType en fs c) -> cmdDef c <> "data " <> tN' t <> " = " <> enumFields en fs <> "    deriving (Eq, Read, Show)\n\n"
-    TL_ST s@(StructType sn fs c) -> cmdDef c <> "data " <> tN' t <> " = " <> tN' t <> " {\n    " <> structFields sn fs <> "    } deriving (Eq, Read, Show)\n\n"
-    TL_ID (Id64 tn i) -> "ct" <> tN' t <> " :: ComponentType " <> tN' t <> "\n"
-                         <> "ct" <> tN' t <> " = ComponentType 0x" <> (T.pack (showHex i "")) <> "\n\n"
-    TL_TD (TypeDeclaration tn bt c) -> cmdDef c <> "type " <> tN' t <> " = " <> bT' bt <> "\n\n"
-    _ -> ""
-    where
-      enumFields en fs = T.concat (L.intersperse ("\n    | ") (map (\ef@(EnumField cn bts _) -> 
-        enumElemN' en cn <> (foldl (\b bt -> b <> " " <> (bT' bt)) "" bts)) fs)) <> "\n"
-      structFields sn fs = T.concat (L.intersperse (",\n    ") (map (\sf@(StructField en bt c) ->
-        cmdDef' c <> structElemN' sn en <> "::" <> bT' bt) fs)) <> "\n"
+  where
+    cmt c = case c of 
+      Nothing -> ""
+      Just (t : ts) -> "-- | " <> t <> "\n" <> (T.concat (map (\t' -> "-- " <> t' <> "\n") ts))
+    cmt' c = let
+        c' = cmt c
+        in if T.length c' > 0 
+            then c' <> "    "
+            else ""
+    enumFields fs = T.concat (L.intersperse ("\n    | ") (map (\ef@(EnumField fn bts _) -> 
+        cap1 fn <> (foldl (\b bt -> b <> " " <> (btToHt bt)) "" bts)) fs)) <> "\n"
+    structFields tn fs = T.concat (L.intersperse (",\n    ") (map (\sf@(StructField fn bt c) ->
+        cmt' c <> low1 tn <> cap1 fn <> "::" <> btToHt bt) fs)) <> "\n"
 
-serDef' _ t = case t of
-    TL_ET e@(EnumType tn fs _) -> "instance Serialise " <> tN' t <> " where\n" <>
+-- haskell statements
+stToHt :: Statement -> T.Text
+stToHt st = case st of
+  ST_TD td -> tdToHt td
+  ST_ID (Id64 tn i) ->  "ct" <> name <> " :: ComponentType " <> name <> "\n"
+                         <> "ct" <> name <> " = ComponentType 0x" <> (T.pack (showHex i "")) <> "\n\n"
+                         where name = cap1 tn
+  ST_IM im -> "" -- to be done
+
+
+-- serialization definitions
+haskellSerializer :: Statement -> T.Text
+haskellSerializer td = case td of
+
+    ST_TD (TD_ET e@(EnumType tn fs _)) -> "instance Serialise " <> cap1 tn <> " where\n" <>
                             eList tn fs <>
                             dList tn fs
                             where
                                 eList tn fs = T.concat (L.map fEncode (zip fs [0..]))
-                                fEncode ((EnumField n ts _), i) = "    encode (" <> enumElemN' tn n <> tsEncodeL ts <>") = " <> arrRList ts <> " encode (" <> (T.pack . show) i <> "::Int) " <> tsEncodeR ts <> "\n"
+                                fEncode ((EnumField n ts _), i) = "    encode (" <> cap1 n <> tsEncodeL ts <>") = " <> arrRList ts <> " encode (" <> (T.pack . show) i <> "::Int) " <> tsEncodeR ts <> "\n"
                                 tsEncodeL ts = T.concat (map (\t -> " v" <> (T.pack . show) t) [1 .. length ts])
                                 arrRList ts = "encodeListLen " <> ((T.pack . show) ((length ts) + 1)) <> " <> " 
                                 tsEncodeR ts = T.concat (map (\t -> "<> encode v" <> (T.pack . show) t) [1 .. length ts])
@@ -94,12 +97,12 @@ serDef' _ t = case t of
                                 decodeHead = "    decode = do\n        decodeListLen\n        i <- decode :: Decoder s Int\n        case i of\n"
                                 fDecode ((EnumField n ts _), i) = "            " <> ((T.pack .show) i)<> " -> (" <> decodeR n ts <> ")\n"
                                 decodeR n ts = if length ts == 0 
-                                                    then "pure " <> enumElemN' tn n
-                                                    else enumElemN' tn n <> " <$> " <> T.concat (L.intersperse " <*> " (map (const "decode") [1..length ts]))
+                                                    then "pure " <> cap1 n
+                                                    else cap1 n <> " <$> " <> T.concat (L.intersperse " <*> " (map (const "decode") [1..length ts]))
 
-    TL_ST s@(StructType _ fs _) -> "instance Serialise " <> tN' t <> " where\n" <>
-                            "    encode (" <> tN' t <> vLList <> ") = " <> arrRList <> vRList <> "\n" <>
-                            "    decode = decodeListLenOf " <> ((T.pack . show) (length fs)) <> " >> " <> tN' t <> " <$> " <> dList <> "\n\n"
+    ST_TD (TD_ST s@(StructType tn fs _)) -> "instance Serialise " <> cap1 tn <> " where\n" <>
+                            "    encode (" <> cap1 tn <> vLList <> ") = " <> arrRList <> vRList <> "\n" <>
+                            "    decode = decodeListLenOf " <> ((T.pack . show) (length fs)) <> " >> " <> cap1 tn <> " <$> " <> dList <> "\n\n"
                             where
                                 arrRList = "encodeListLen " <> ((T.pack . show) (length fs)) <> " <> "
                                 nList = [1 .. length fs]
@@ -110,9 +113,10 @@ serDef' _ t = case t of
                         
     _ -> ""
 
-nsEnd' = ""
 
-headDef' _ f m t = let 
+-- Haskell header content
+haskellHeader :: T.Text -> T.Text -> T.Text
+haskellHeader f m = let
     mod = if T.length m > 0 && T.length f > 0
         then "module " <> m <> "." <> f <> "\nwhere\n\n"
         else ""
@@ -127,10 +131,13 @@ headDef' _ f m t = let
         "import Data.Monoid\n" <>
         "import Control.Applicative\n\n"
 
-footDef' _ _ = ""
 
-ctDef' :: Bool -> TopLevelType -> T.Text
-ctDef' _ _ = ""
-
-hConvertible = Convertible tN' structElemN' enumElemN' bT' (headDef' False) (typeDef' False) (serDef' False) nsEnd' (ctDef' False) (footDef' False) 
-
+writeHaskellFile :: T.Text -> T.Text -> [Statement] -> T.Text
+writeHaskellFile fname mname sts =
+    haskellHeader fname mname <> 
+    "\n" <>
+    (T.concat (
+      (map stToHt sts) ++
+      (map haskellSerializer sts)
+    ))
+  

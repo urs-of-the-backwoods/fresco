@@ -30,28 +30,3 @@ low1 :: T.Text -> T.Text
 low1 "" = ""
 low1 t = T.cons ((C.toLower . T.head) t) (T.tail t)
 
-data Convertible = Convertible {
-  tN :: TopLevelType -> T.Text       -- type name
-, structElemN :: TypeName -> FieldName -> T.Text
-, enumElemN :: TypeName -> FieldName -> T.Text 
-, bT :: BaseType -> T.Text           -- base type, a being ignored
-, headDef :: T.Text -> T.Text -> [TopLevelType] -> T.Text                  -- header definition for file, a being ignored
-, typeDef :: TopLevelType -> T.Text  -- top level type definition
-, serDef :: TopLevelType -> T.Text   -- serialization definition
-, nsEnd :: T.Text
-, ctDef :: TopLevelType -> T.Text  -- top level type definition
-, footDef :: T.Text -> T.Text                  -- footer definition for file, a being ignored
-}
-
-conversion :: Convertible -> T.Text -> T.Text -> [TopLevelType] -> T.Text
-conversion cn fname mname lTop = 
-  (headDef cn) fname mname lTop <> 
-    "\n" <>
-    (T.concat (
-      (map (typeDef cn) lTop) ++
-      (map (serDef cn) lTop)
-    )) <>
-    (nsEnd cn) <>
-    "\n" <> 
-    (T.concat (map (ctDef cn) lTop)) <>
-    (footDef cn) fname 

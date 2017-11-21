@@ -37,7 +37,7 @@ executable sinopia
   main-is:             sinopia.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base, attoparsec, text, fresco-sinopia
-  other-modules:       Sinopia.Data, Sinopia.Parser, Sinopia.Util, Sinopia.Haskell, Sinopia.Rust, Sinopia.C
+  other-modules:       Sinopia.Data, Sinopia.Parser, Sinopia.Util, Sinopia.Haskell, Sinopia.Rust, Sinopia.C, Sinopia.JavaScript
   default-language:    Haskell2010
 
 test-suite specs

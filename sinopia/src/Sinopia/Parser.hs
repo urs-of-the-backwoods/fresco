@@ -97,7 +97,7 @@ parseId64 = do
     i <- integer
     return (Id64 n (fromIntegral i))
 
-parsePT :: Parser Primitive
+parsePT :: Parser PrimitiveType
 parsePT = 
     (rword "Bool" >> return PT_Bool)
     <|> (rword "Null" >> return PT_Null)
@@ -163,28 +163,32 @@ parseIM = do
     i <- integer
     return (Import a (fromIntegral i))
 
-parseTD :: Parser TypeDeclaration
+parseTD :: Parser TypeDefinition
 parseTD = do
     c <- option Nothing (Just <$> cmnt)
     rword "type"
     td <- identifier
     equals
     tn <- parseBT
-    return (TypeDeclaration td tn c)
+    return (TypeDefinition td tn c)
 
-parseTL :: Parser TopLevelType
-parseTL = do
-        (parseIM >>= \v -> return (TL_IM v))
-    <|> (parseTD >>= \v -> return (TL_TD v))
-    <|> (parseId64 >>= \v -> return (TL_ID v))
-    <|> (parseST >>= \v -> return (TL_ST v))
-    <|> (parseET >>= \v -> return (TL_ET v))
+parseTDC :: Parser TypeDeclaration
+parseTDC =
+    (parseTD >>= \v -> return (TD_TD v))
+    <|> (parseST >>= \v -> return (TD_ST v))
+    <|> (parseET >>= \v -> return (TD_ET v))
 
-parseTLS = do
+parseSTMT :: Parser Statement
+parseSTMT = 
+    (parseTDC >>= \v -> return (ST_TD v))
+    <|> (parseId64 >>= \v -> return (ST_ID v))
+    <|> (parseIM >>= \v -> return (ST_IM v))
+
+parseALL = do
     spc'
-    v <- many1 parseTL
+    v <- many1 parseSTMT
     endOfInput
     return v
 
-parseAST inS = parseOnly parseTLS inS
+parseAST inS = parseOnly parseALL inS
 

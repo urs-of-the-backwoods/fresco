@@ -23,7 +23,7 @@ type FieldName = T.Text
 type ImportName = T.Text
 type Comment = [T.Text]
 
-data Primitive = PT_Bool | PT_Null
+data PrimitiveType = PT_Bool | PT_Null
                     | PT_Int8 | PT_Int16 | PT_Int32 | PT_Int64 
                     | PT_UInt8 | PT_UInt16 | PT_UInt32 | PT_UInt64 
                     | PT_Float32 | PT_Float64
@@ -31,10 +31,13 @@ data Primitive = PT_Bool | PT_Null
                     | PT_Data
                     deriving (Show, Read, Eq)
 
-data BaseType = BT_PT Primitive
+data BaseType = BT_PT PrimitiveType
                 | BT_TN TypeName
                 | BT_LT BaseType
                 deriving (Show, Read, Eq)
+
+data TypeDefinition = TypeDefinition TypeName BaseType (Maybe Comment)
+                    deriving (Show, Read, Eq)
 
 data EnumField = EnumField FieldName [BaseType] (Maybe Comment)        
               deriving (Show, Read, Eq)
@@ -48,50 +51,28 @@ data StructField = StructField FieldName BaseType (Maybe Comment)
 data StructType = StructType TypeName [StructField] (Maybe Comment)
                     deriving (Show, Read, Eq)
 
-data Import = Import ImportName W.Word64
-                    deriving (Show, Read, Eq)
-
-data TypeDeclaration = TypeDeclaration TypeName BaseType (Maybe Comment)
+data TypeDeclaration = TD_TD TypeDefinition
+                    | TD_ET EnumType
+                    | TD_ST StructType
                     deriving (Show, Read, Eq)
 
 data Id64 = Id64 TypeName W.Word64
                     deriving (Show, Read, Eq)
 
-data TopLevelType = TL_IM Import
-                    | TL_TD TypeDeclaration
-                    | TL_ID Id64
-                    | TL_ET EnumType
-                    | TL_ST StructType
+data Import = Import ImportName W.Word64
+                    deriving (Show, Read, Eq)
+
+data Statement = ST_TD TypeDeclaration
+               | ST_ID Id64
+               | ST_IM Import
                     deriving (Show, Read, Eq)
 
 
 -- functions, which deconstruct data structures
 
-typeName :: TopLevelType -> TypeName
+typeName :: TypeDeclaration -> TypeName
 typeName tlt = case tlt of
-    TL_TD (TypeDeclaration tn _ _) -> tn
-    TL_ST (StructType tn _ _) -> tn
-    TL_ET (EnumType tn _ _) -> tn
-    TL_ID (Id64 tn _) -> tn
-    _ -> ""
-
--- check of data structure
-
-isIm (TL_IM _) = True
-isIm _ = False
-
-isTd (TL_TD _) = True
-isTd _ = False
-
-isId (TL_ID _) = True
-isId _ = False
-
-isEt (TL_ET _) = True
-isEt _ = False
-
-isSt (TL_ST _) = True
-isSt _ = False
-
-
-
+    TD_TD (TypeDefinition tn _ _) -> tn
+    TD_ST (StructType tn _ _) -> tn
+    TD_ET (EnumType tn _ _) -> tn
 

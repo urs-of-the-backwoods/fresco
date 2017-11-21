@@ -32,13 +32,13 @@ import Sinopia.C
 
 -- Main Program
 
-showTLT :: [TopLevelType] -> T.Text
+showTLT :: [Statement] -> T.Text
 showTLT l = foldl (\s tt -> s <> ((T.pack . show) tt) <> "\n") "" l
 
 data Options = Options  { optVerbose    :: Bool
                         , optInput      :: IO T.Text
                         , optOutput     :: T.Text -> IO ()
-                        , optFilter     :: [TopLevelType] -> T.Text
+                        , optFilter     :: [Statement] -> T.Text
                         , optName       :: T.Text
                         , optModule     :: T.Text
                         }
@@ -90,10 +90,10 @@ options =
             (\arg opt -> do
 --                print $ T.concat ["Hi: ", optName opt]
                 return opt { optFilter = case arg of
-                "Haskell" -> \l -> conversion hConvertible (optName opt) (optModule opt) l
-                "JavaScript" -> \l -> conversion jsConvertible (optName opt) (optModule opt) l
-                "C-cpp" -> \l -> conversion ciConvertible (optName opt) (optModule opt) l -- implementation
-                "C-hpp" -> \l -> conversion cdConvertible (optName opt) (optModule opt) l -- definition
+                "Haskell" -> \l -> writeHaskellFile (optName opt) (optModule opt) l
+                "JavaScript" -> \l -> writeJavaScriptFile (optName opt) (optModule opt) l
+                "C-cpp" -> \l -> writeCppFile (optName opt) (optModule opt) l -- implementation
+                "C-hpp" -> \l -> writeHppFile (optName opt) (optModule opt) l -- definition
                 _ -> showTLT })
             "<language>")
         "Generator"
