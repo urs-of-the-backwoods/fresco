@@ -163,7 +163,7 @@ jsStructToData fields = let
 -- to data, check if needed, then write code to transform to pure json data
 jsEnumToData :: [EnumField] -> T.Text
 jsEnumToData fields = let
-  transF (EnumField fn bts _) n = "       if (sel == " <> T.pack (show n) <> ") {\n" <> (foldl (\a b -> a <> transBt b "toData" True) "" bts) <> "       }\n"
+  transF (EnumField fn bts _) n = "       if (this.selector == " <> T.pack (show n) <> ") {\n" <> (foldl (\a b -> a <> transBt b "toData" True) "" bts) <> "       }\n"
   transform fs = foldl (\a (f, n) -> a <> transF f n) "" (zip fs [0..])
   wrap d = "    toData () {\n" <>
            "       var arr_in = this.record.slice(); var arr_out = [];\n" <>
@@ -187,7 +187,7 @@ jsStructFromData fields = let
 -- from data, check if needed, then write code to transform from pure json data
 jsEnumFromData :: [EnumField] -> T.Text
 jsEnumFromData fields = let
-  transF (EnumField fn bts _) n = "       if (sel == " <> T.pack (show n) <> ") {\n" <> (foldl (\a b -> a <> transBt b "fromData" True) "" bts) <> "       }\n"
+  transF (EnumField fn bts _) n = "       if (json_data[0] == " <> T.pack (show n) <> ") {\n" <> (foldl (\a b -> a <> transBt b "fromData" True) "" bts) <> "       }\n"
   -- write transformation for all fields, but make sure, only the right one is used
   transform fs = foldl (\a (f, n) -> a <> transF f n) "" (zip fs [0..])
   wrap d = "       var arr_in = json_data.slice(0, 1); var arr_out = [];\n" <> d <> "       var arr = [json_data[0], ...arr_out];\n"
