@@ -25,7 +25,7 @@ import Data.Monoid
 jsHeader :: T.Text
 jsHeader = "import CBOR from '../other_libs/cbor';\n\n"
 
--- base class
+-- struct class
 jsBaseStructClass ::  T.Text
 jsBaseStructClass = T.concat [
    "class CborStructItem {\n",
@@ -38,9 +38,10 @@ jsBaseStructClass = T.concat [
    "       this.record = args;\n",
    "    }\n",
    "\n",
-   "    static fromCBOR (ser_data) {\n",
+   "    fromCBOR (ser_data) {\n",
    "       var json_data = CBOR.decode(ser_data);\n",
-   "       return fromData(json_data);\n",
+   "       this.fromData(json_data);\n",
+   "       return this;\n",
    "    }\n",
    "\n",
    "    toCBOR () {\n",
@@ -51,78 +52,58 @@ jsBaseStructClass = T.concat [
    "    toData () {\n",
    "       return this.record;\n",
    "    }\n",
-   "}\n\n"
+   "\n",
+   "    fromData (json_data) {\n",
+   "       this.setValue(...json_data);\n",
+   "       return this;\n",
+   "    }\n",
+   "}\n",
+    "\n"
    ]
 
+-- enum class
 jsBaseEnumClass ::  T.Text
 jsBaseEnumClass = T.concat [
-   "class CborEnumItem {\n",
-   "\n",
-   "    constructor(s, ...args) {\n",
-   "       this.setValue(s, ...args);\n",
-   "    }\n",
-   "\n",
-   "    setValue(s, ...args) {\n",
-   "       this.selector = s;\n",
-   "       this.record = args;\n",
-   "    }\n",
-   "\n",
-   "    static fromCBOR (ser_data) {\n",
-   "       var json_data = CBOR.decode(ser_data);\n",
-   "       return fromData(json_data);\n",
-   "    }\n",
-   "\n",
-   "    toCBOR () {\n",
-   "       var data = this.toData();\n",
-   "       return CBOR.encode(data);\n",
+   "class CborEnumItem extends CborStructItem {\n",
+   "    setValue(...args) {\n",
+   "       if (args.length > 0) {\n",
+   "         this.selector = args[0];\n",
+   "         this.record = args.slice(1);\n",
+   "       }\n",
    "    }\n",
    "\n",
    "    toData () {\n",
    "       return [this.selector, ...this.record];\n",
    "    }\n",
-   "}\n\n"
+   "}\n",
+   "\n"
    ]
 
 -- class for enums
 jsStructClass :: T.Text -> T.Text -> T.Text -> T.Text -> T.Text
 jsStructClass cname recordFunctions toData fromData = T.concat [
    "class " <> cname <> " extends CborStructItem {\n",
-   "\n",
-   "    constructor(...args) {\n",
-   "       super(...args);\n",
-   "    }\n",
-   "\n",
    recordFunctions,
    toData,
-   "    static fromData (json_data) {\n",
    fromData,
-   "       return new " <> cname <> "(...arr);\n",
-   "    }\n",
-   "}\n\n"
+   "\n"
    ]
 
 -- class for enums
 jsEnumClass :: T.Text -> T.Text -> T.Text -> T.Text
 jsEnumClass cname toData fromData = T.concat [
    "class " <> cname <> " extends CborEnumItem {\n",
-   "\n",
-   "    constructor(s, ...args) {\n",
-   "       super(s, ...args);\n",
-   "    }\n",
-   "\n",
    toData,
-   "    static fromData (json_data) {\n",
    fromData,
-   "       return new " <> cname <> "(...arr);\n",
-   "    }\n",
-   "}\n\n"
+   "}\n",
+   "\n"
    ]
 
 -- check if basetype is not pure JSON
 checkBt :: BaseType -> Bool
 checkBt bt = case bt of
   BT_PT _ -> False
-  BT_LT a -> checkBt a
+  BT_LT a -> True 
   BT_TN _ -> True
 
  --- check if we have non-Json fields in data structure (including sub-structures)
@@ -140,7 +121,11 @@ jsEnumCheckTransformNeeded fs = let
 transBt :: BaseType -> T.Text -> Bool -> T.Text
 transBt bt toDataOrFromData boolSpace = case bt of
     BT_PT _ -> addSpace boolSpace <> "       arr_out.push(arr_in.shift());\n"
-    BT_TN _ -> addSpace boolSpace <> "       arr_out.push(arr_in.shift()." <> toDataOrFromData <> "());\n"
+    BT_TN cname -> addSpace boolSpace <> if (toDataOrFromData == "toData")
+                 then 
+                   "       arr_out.push(arr_in.shift().toData());\n"
+                 else
+                   "       arr_out.push((new " <> cap1 cname <> "()).fromData(arr_in.shift()));\n"
     BT_LT a -> addSpace boolSpace <> "       arr_out.push(\n" <>
                addSpace boolSpace <> "         arr_in.shift().map(function (a) { var arr_in = [a]; var arr_out = [];\n"
                                   <> "  " <> transBt a toDataOrFromData boolSpace <>
@@ -178,11 +163,15 @@ jsStructFromData fields = let
   transF (StructField fn bt _) = transBt bt "fromData" False <> "\n"
   -- write transformation for all fields, but make sure, only the right one is used
   transform fs = foldl (\a f -> a <> transF f) "" fs
-  wrap d = "       var arr_in = json_data.slice(); var arr_out = [];\n" <> d <> "       var arr = arr_out;\n"
-  -- standard output
-  stdToData = "       var arr = json_data;\n"
+  wrap d = "    fromData (json_data) {\n" <>
+           "      var arr_in = json_data.slice(); var arr_out = [];\n" <>
+           d <>
+           "      this.record = arr_out;\n" <>
+           "      return this;\n" <>
+           "    }\n"
+           
   -- finally do it
-  in if jsStructCheckTransformNeeded fields then wrap (transform fields) else stdToData 
+  in if jsStructCheckTransformNeeded fields then wrap (transform fields) else "" 
 
 -- from data, check if needed, then write code to transform from pure json data
 jsEnumFromData :: [EnumField] -> T.Text
@@ -190,11 +179,16 @@ jsEnumFromData fields = let
   transF (EnumField fn bts _) n = "       if (json_data[0] == " <> T.pack (show n) <> ") {\n" <> (foldl (\a b -> a <> transBt b "fromData" True) "" bts) <> "       }\n"
   -- write transformation for all fields, but make sure, only the right one is used
   transform fs = foldl (\a (f, n) -> a <> transF f n) "" (zip fs [0..])
-  wrap d = "       var arr_in = json_data.slice(0, 1); var arr_out = [];\n" <> d <> "       var arr = [json_data[0], ...arr_out];\n"
-  -- standard output
-  stdToData = "       var arr = json_data;\n"
+  wrap d = "     fromData (json_data) {\n" <>
+           "       var arr_in = json_data.slice(1); var arr_out = [];\n" <>
+           d <>
+           "       this.selector = json_data[0];\n" <>
+           "       this.record = arr_out;\n" <>
+           "       return this;\n" <>
+           "     }\n"
+           
   -- finally do it
-  in if jsEnumCheckTransformNeeded fields then wrap (transform fields) else stdToData 
+  in if jsEnumCheckTransformNeeded fields then wrap (transform fields) else "" 
 
 -- record functions for structs
 jsRecordFunctions :: [StructField] -> T.Text
@@ -214,16 +208,23 @@ jsEnumSelector cname fields = T.concat $ map (\(EnumField fn _ mbC, n) ->
        Nothing -> ""                 )  <> "\n" ) )
   (zip fields [0..])
 
+topCmts :: Maybe [T.Text] -> T.Text
+topCmts mbC = case mbC of
+  Nothing -> ""
+  Just cmts -> T.concat (map (\c -> "// " <> c <> "\n") cmts)
+  
 writeJavaScriptFile :: T.Text -> T.Text -> [Statement] -> T.Text
 writeJavaScriptFile fname mname sts = jsHeader <> jsBaseStructClass <> jsBaseEnumClass <> T.concat (map f sts) where
   f s = case s of
     -- write enum types
     ST_TD (TD_ET (EnumType tn fields mbC) ) ->
+      topCmts mbC <>
       jsEnumClass (cap1 tn) (jsEnumToData fields) (jsEnumFromData fields) <>
       jsEnumSelector (cap1 tn) fields <>
       "\n"
     -- write struct types
     ST_TD (TD_ST (StructType tn fields mbC) ) ->
+      topCmts mbC <>
       jsStructClass (cap1 tn) (jsRecordFunctions fields) (jsStructToData fields) (jsStructFromData fields) <>
       "\n"
     -- to be done: add comments everywhere, add imports, ids and other types

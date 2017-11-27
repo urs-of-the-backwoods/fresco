@@ -54,19 +54,22 @@ tdToHt td = case td of
 
   TD_TD (TypeDefinition tn bt mbCmt) -> cmt mbCmt <> "type " <> cap1 tn <> " = " <> btToHt bt <> "\n\n"
   TD_ST (StructType tn sfs mbCmt) -> cmt mbCmt <> "data " <> cap1 tn <> " = " <> cap1 tn <> " {\n    " <> structFields tn sfs <> "    } deriving (Eq, Read, Show)\n\n"
-  TD_ET (EnumType tn efs mbCmt) -> cmt mbCmt <> "data " <> cap1 tn <> " = " <> enumFields efs <> "    deriving (Eq, Read, Show)\n\n"
+  TD_ET (EnumType tn efs mbCmt) -> cmt mbCmt <> "data " <> cap1 tn <> " = " <> enumFields efs <> "\n    deriving (Eq, Read, Show)\n\n"
 
   where
     cmt c = case c of 
       Nothing -> ""
       Just (t : ts) -> "-- | " <> t <> "\n" <> (T.concat (map (\t' -> "-- " <> t' <> "\n") ts))
+    cmt'' c = case c of 
+      Nothing -> ""
+      Just (t : ts) -> " -- ^ " <> t <> " " <> (T.concat (map (\t' -> t' <> " ") ts))
     cmt' c = let
         c' = cmt c
         in if T.length c' > 0 
             then c' <> "    "
             else ""
-    enumFields fs = T.concat (L.intersperse ("\n    | ") (map (\ef@(EnumField fn bts _) -> 
-        cap1 fn <> (foldl (\b bt -> b <> " " <> (btToHt bt)) "" bts)) fs)) <> "\n"
+    enumFields fs = T.concat (L.intersperse ("\n    | ") (map (\ef@(EnumField fn bts c) -> 
+        cap1 fn <> (foldl (\b bt -> b <> " " <> (btToHt bt) ) "" bts) <> cmt'' c) fs))
     structFields tn fs = T.concat (L.intersperse (",\n    ") (map (\sf@(StructField fn bt c) ->
         cmt' c <> low1 tn <> cap1 fn <> "::" <> btToHt bt) fs)) <> "\n"
 
@@ -122,7 +125,6 @@ haskellHeader f m = let
         else ""
     in
         mod <>
-        "import Fresco\n" <>
         "import Data.Binary.Serialise.CBOR\n" <>
         "import Data.Binary.Serialise.CBOR.Encoding\n" <>
         "import Data.Binary.Serialise.CBOR.Decoding\n\n" <>
