@@ -2,6 +2,7 @@ intonaco/package
 intonaco/target
 intonaco/Cargo.lock
 sinopia/sinopia.exe
+sinopia/sinopia
 sinopia/.stack-work
 arriccio/aio.exe
 arriccio/aio
