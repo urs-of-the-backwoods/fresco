@@ -503,13 +503,26 @@ func main() {
 // some basic arriccio specific file handling
 //
 
+// arriccio directory, either in home path ($HOME/.aio) or given by env variable AIO_COMPONENT_PATH
 func getArriccioDir() string {
-	dir := getUserHomeDir()
-	arrdir := filepath.Join(dir, ".aio")
+	arrdir := ""
+	envdir := os.Getenv("AIO_COMPONENT_PATH")
+	if envdir != "" {
+		arrdir = envdir
+	} else {
+		dir := getUserHomeDir()
+		arrdir = filepath.Join(dir, ".aio")
+	}
 	_, ok := isLocalDirValid(arrdir)
 	if !ok {
 		os.MkdirAll(arrdir, 0770)
+	}
+	_, ok = isLocalDirValid(filepath.Join(arrdir, "cache"))
+	if !ok {
 		os.MkdirAll(filepath.Join(arrdir, "cache"), 0770)
+	}
+	_, ok = isLocalDirValid(filepath.Join(arrdir, "impl"))
+	if !ok {
 		os.MkdirAll(filepath.Join(arrdir, "impl"), 0770)
 	}
 	return arrdir
@@ -1126,7 +1139,9 @@ func runComponentWithDependencies(cmd string, db AliasDB, workDir string, args [
 			printDepProcInfo(el)
 		}
 	} else {
-		// build run command and start it
-		composeEnvironmentAndRunCommand(rlist2, args, console)
+		// build run command and start it, only, if not update
+		if !update {
+			composeEnvironmentAndRunCommand(rlist2, args, console)
+		}
 	}
 }
