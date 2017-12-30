@@ -1,11 +1,11 @@
-// 
+//
 //  Fresco Framework for Multi-Language Programming
 //  Copyright 2015-2017 Peter Althainz
-//    
+//
 //  Distributed under the Apache License, Version 2.0
-//  (See attached file LICENSE or copy at 
+//  (See attached file LICENSE or copy at
 //  http://www.apache.org/licenses/LICENSE-2.0)
-// 
+//
 //  file: arriccio/main.go
 //
 
@@ -13,34 +13,32 @@
 // Components are described in a toml file and stored together with their implementation files on the web.
 // On invocation aio will download and execute them.
 // It is possible to alias local directories for a component, to enable local development and testing.
-
 package main
 
 import (
-
-	"log"
+	"bufio"
 	"bytes"
-	"os"
-	"os/exec"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"io/ioutil"
-    "bufio"
-	"fmt"
-	"runtime"
+	"log"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"encoding/hex"
-    "encoding/base64"
 
-    "crypto/rand"
-    "crypto/sha256"
+	"crypto/rand"
+	"crypto/sha256"
 
 	"archive/tar"
 	"compress/gzip"
 	"net/http"
 
-    "golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/BurntSushi/toml"
 	"github.com/asaskevich/govalidator"
@@ -50,13 +48,13 @@ import (
 // version
 //
 
-var version_aio = "0.3.0"
+var version_aio = "0.3.1"
 
 // version remarks
-// 0.1 initial version, including semantic version range mechanism 
+// 0.1 initial version, including semantic version range mechanism
 // 0.2 removed semantic version range mechanism
 // 0.3 changed toml keys to more descriptive ones
-
+// 0.3.1 fixed key https check
 
 //
 // single routines
@@ -74,7 +72,6 @@ func createClient() *http.Client {
 
 var httpClient *http.Client
 
-
 // checks and house keeping
 
 func isUrlValid(url string) bool {
@@ -83,10 +80,10 @@ func isUrlValid(url string) bool {
 
 func checkNameUrl(cmd string, db AliasDB) {
 	if isUrlValid(cmd) {
-		return 
+		return
 	}
 	if _, ok := db.Commands[cmd]; ok {
-		return 
+		return
 	}
 	log.Fatal("need <url> or <name> not: ", cmd)
 }
@@ -97,7 +94,7 @@ func isLocalDirValid(dir string) (string, bool) {
 		abspath, _ := filepath.Abs(dir)
 		return abspath, src.IsDir()
 	}
-	return dir, false  // returns the absolute path and a success indicator (bool).
+	return dir, false // returns the absolute path and a success indicator (bool).
 }
 
 func getUserHomeDir() string {
@@ -112,161 +109,171 @@ func getUserHomeDir() string {
 }
 
 func matchArchAndOs(arch string, os string) bool {
-	return (arch == "*" || arch == runtime.GOARCH) &&  // GOARCH can be 386, amd64, amd64p32, ppc64 or arm
-		   (os == "*" || os == runtime.GOOS)           // GOOS can be darwin, freebsd, linux, windows
+	return (arch == "*" || arch == runtime.GOARCH) && // GOARCH can be 386, amd64, amd64p32, ppc64 or arm
+		(os == "*" || os == runtime.GOOS) // GOOS can be darwin, freebsd, linux, windows
 }
-
 
 // file utilities
 
 func extractTarGzFile(sourcefile string, outdir string) {
 
-        if sourcefile == "" { log.Fatal("extract tgz file: empty filename") }
-        file, err := os.Open(sourcefile)
-        if err != nil  { log.Fatal(fmt.Sprintln(err)) }
-        defer file.Close()
+	if sourcefile == "" {
+		log.Fatal("extract tgz file: empty filename")
+	}
+	file, err := os.Open(sourcefile)
+	if err != nil {
+		log.Fatal(fmt.Sprintln(err))
+	}
+	defer file.Close()
 
-        var fileReader io.ReadCloser = file
-        if fileReader, err = gzip.NewReader(file); err != nil { log.Fatal(fmt.Sprintln(err)) }
-        defer fileReader.Close()
+	var fileReader io.ReadCloser = file
+	if fileReader, err = gzip.NewReader(file); err != nil {
+		log.Fatal(fmt.Sprintln(err))
+	}
+	defer fileReader.Close()
 
-        tarBallReader := tar.NewReader(fileReader)
+	tarBallReader := tar.NewReader(fileReader)
 
-		os.MkdirAll(outdir, 0770)
+	os.MkdirAll(outdir, 0770)
 
-        for {
-            header, err := tarBallReader.Next()
-            if err != nil {
-                    if err == io.EOF {
-                            break
-                    }
-                    fmt.Println(err)
-                    os.Exit(1)
-            }
+	for {
+		header, err := tarBallReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			fmt.Println(err)
+			os.Exit(1)
+		}
 
-            filename := filepath.Join(outdir, header.Name)
+		filename := filepath.Join(outdir, header.Name)
 
-			switch header.Typeflag {
+		switch header.Typeflag {
 
-				case tar.TypeDir:
-				     err = os.MkdirAll(filename, os.FileMode(header.Mode)) // or use 0755 if you prefer
-				     if err != nil { log.Fatal(fmt.Sprintln(err)) }
+		case tar.TypeDir:
+			err = os.MkdirAll(filename, os.FileMode(header.Mode)) // or use 0755 if you prefer
+			if err != nil {
+				log.Fatal(fmt.Sprintln(err))
+			}
 
-				case tar.TypeReg:
-				     writer, err := os.Create(filename)
-				     if err != nil { log.Fatal(fmt.Sprintln(err)) }
-				     io.Copy(writer, tarBallReader)
-				     err = os.Chmod(filename, os.FileMode(header.Mode))
-				     if err != nil { log.Fatal(fmt.Sprintln(err)) }
-				     writer.Close()
+		case tar.TypeReg:
+			writer, err := os.Create(filename)
+			if err != nil {
+				log.Fatal(fmt.Sprintln(err))
+			}
+			io.Copy(writer, tarBallReader)
+			err = os.Chmod(filename, os.FileMode(header.Mode))
+			if err != nil {
+				log.Fatal(fmt.Sprintln(err))
+			}
+			writer.Close()
 
-				case tar.TypeLink:
-					dest := filepath.Join(outdir, header.Linkname)
-					if err := os.Link(dest, filename); err != nil {
-		               	log.Fatal(fmt.Sprintf("error in untar type : %c in file %s", header.Typeflag, filename))
-					}
+		case tar.TypeLink:
+			dest := filepath.Join(outdir, header.Linkname)
+			if err := os.Link(dest, filename); err != nil {
+				log.Fatal(fmt.Sprintf("error in untar type : %c in file %s", header.Typeflag, filename))
+			}
 
-				case tar.TypeSymlink:
-					if err := os.Symlink(header.Linkname, filename); err != nil {
-		               	log.Fatal(fmt.Sprintf("error in untar type : %c in file %s", header.Typeflag, filename))
-					}
+		case tar.TypeSymlink:
+			if err := os.Symlink(header.Linkname, filename); err != nil {
+				log.Fatal(fmt.Sprintf("error in untar type : %c in file %s", header.Typeflag, filename))
+			}
 
-                default:
-                    log.Fatal(fmt.Printf("Unable to untar type : %c in file %s", header.Typeflag, filename))
-            }
-        }
+		default:
+			log.Fatal(fmt.Printf("Unable to untar type : %c in file %s", header.Typeflag, filename))
+		}
+	}
 }
 
 func compileHash(fname string) []byte {
 
-    hasher := sha256.New()
+	hasher := sha256.New()
 
-    f, err := os.Open(fname)
-    if err != nil {
-        log.Fatal("error open file to hash: ", err)
-    }
-    defer f.Close()
-    if _, err := io.Copy(hasher, f); err != nil {
-        log.Fatal(err)
-    }
+	f, err := os.Open(fname)
+	if err != nil {
+		log.Fatal("error open file to hash: ", err)
+	}
+	defer f.Close()
+	if _, err := io.Copy(hasher, f); err != nil {
+		log.Fatal(err)
+	}
 
-    return hasher.Sum(nil)
+	return hasher.Sum(nil)
 }
 
 func signFile(fname string, keyFile string) {
-    hs := compileHash(fname)
-    signer := loadPrivateKey(keyFile)
-    signed, err := signer.Sign(rand.Reader, hs)
-    if err != nil {
-        log.Fatal("could not sign: ", err)
-    }
-    writeSignature(fname + ".sig", *signed)
+	hs := compileHash(fname)
+	signer := loadPrivateKey(keyFile)
+	signed, err := signer.Sign(rand.Reader, hs)
+	if err != nil {
+		log.Fatal("could not sign: ", err)
+	}
+	writeSignature(fname+".sig", *signed)
 }
 
 func verifyFile(fname string, sigFile string, keyFile string) bool {
-    hs := compileHash(fname)
-    publicKey := loadPublicKey(keyFile)
-    s := readSignature(sigFile)
-    err := publicKey.Verify(hs, &s)
-    if err == nil {
-        return true
-    } else {
-        return false
-    }
+	hs := compileHash(fname)
+	publicKey := loadPublicKey(keyFile)
+	s := readSignature(sigFile)
+	err := publicKey.Verify(hs, &s)
+	if err == nil {
+		return true
+	} else {
+		return false
+	}
 }
 
 func writeSignature(fname string, sig ssh.Signature) {
-    f, err := os.Create(fname)
-    if err != nil {
-    	log.Fatal("error creating signature file: ", err)
-    }
-    defer f.Close()
-    f.WriteString(sig.Format)
-    f.WriteString("\n")
-    f.WriteString(base64.StdEncoding.EncodeToString(sig.Blob))
-    f.WriteString("\n")
-} 
+	f, err := os.Create(fname)
+	if err != nil {
+		log.Fatal("error creating signature file: ", err)
+	}
+	defer f.Close()
+	f.WriteString(sig.Format)
+	f.WriteString("\n")
+	f.WriteString(base64.StdEncoding.EncodeToString(sig.Blob))
+	f.WriteString("\n")
+}
 
 func readSignature(fname string) ssh.Signature {
-    f, err := os.Open(fname)
-    if err != nil {
-    	log.Fatal("error open signature file: ", err)
-    }
-    defer f.Close()
-    s := bufio.NewScanner(f)
-    var sig ssh.Signature
-    s.Scan()
-    sig.Format = s.Text()
-    s.Scan()
-    sig.Blob, _ = base64.StdEncoding.DecodeString(s.Text())
-    return sig
-} 
+	f, err := os.Open(fname)
+	if err != nil {
+		log.Fatal("error open signature file: ", err)
+	}
+	defer f.Close()
+	s := bufio.NewScanner(f)
+	var sig ssh.Signature
+	s.Scan()
+	sig.Format = s.Text()
+	s.Scan()
+	sig.Blob, _ = base64.StdEncoding.DecodeString(s.Text())
+	return sig
+}
 
 func loadPublicKey(path string) ssh.PublicKey {
 
-    bs, err := ioutil.ReadFile(path)
-    if err != nil {
-    	log.Fatal("error open public key file: ", err)
-    }
-    rsa, _, _, _, err2 := ssh.ParseAuthorizedKey(bs)
-    if err2 != nil {
-    	log.Fatal("error cannot parse public key file: ", err2)
-    }
-    return rsa
+	bs, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Fatal("error open public key file: ", err)
+	}
+	rsa, _, _, _, err2 := ssh.ParseAuthorizedKey(bs)
+	if err2 != nil {
+		log.Fatal("error cannot parse public key file: ", err2)
+	}
+	return rsa
 }
 
 func loadPrivateKey(path string) ssh.Signer {
-    bs, err := ioutil.ReadFile(path)
-    if err != nil {
-    	log.Fatal("error open private key file: ", err)
-    }
-    rsa, err2 := ssh.ParsePrivateKey(bs)
-    if err2 != nil {
-    	log.Fatal("error cannot parse private key file: ", err2)
-    }
-    return rsa
+	bs, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Fatal("error open private key file: ", err)
+	}
+	rsa, err2 := ssh.ParsePrivateKey(bs)
+	if err2 != nil {
+		log.Fatal("error cannot parse private key file: ", err2)
+	}
+	return rsa
 }
-
 
 //
 // main function
@@ -307,7 +314,7 @@ func main() {
 
 		case "version":
 			{
-				println("aio version " + version_aio + " running on", runtime.GOARCH + "-" + runtime.GOOS);
+				println("aio version "+version_aio+" running on", runtime.GOARCH+"-"+runtime.GOOS)
 			}
 
 		// aio alias <name> <url>
@@ -333,8 +340,8 @@ func main() {
 					delete(db.Commands, os.Args[2])
 					writeAliasDB(db)
 				} else {
-				 log.Fatal("remove-alias needs one parameter: aio remove-alias <name>")
-			    }
+					log.Fatal("remove-alias needs one parameter: aio remove-alias <name>")
+				}
 			}
 
 		// aio local <url> local-dir
@@ -394,7 +401,7 @@ func main() {
 		case "sign":
 			{
 				if len(os.Args) == 4 {
-			        signFile(os.Args[2], os.Args[3])
+					signFile(os.Args[2], os.Args[3])
 				} else {
 					log.Fatal("sign needs two parameters, aio sign <file> <private key>")
 				}
@@ -404,13 +411,13 @@ func main() {
 		case "verify":
 			{
 				if len(os.Args) == 4 {
-			        if verifyFile(os.Args[2], os.Args[2] + ".sig", os.Args[3]) {
-			            println("file is correctly signed")
-			            os.Exit(0)
-			        } else {
-			            println("file is not properly signed, signature does not fit")
-			            os.Exit(-1)
-			        }
+					if verifyFile(os.Args[2], os.Args[2]+".sig", os.Args[3]) {
+						println("file is correctly signed")
+						os.Exit(0)
+					} else {
+						println("file is not properly signed, signature does not fit")
+						os.Exit(-1)
+					}
 				} else {
 					log.Fatal("verify needs two parameters, aio verify <file> <public key>")
 				}
@@ -434,7 +441,7 @@ func main() {
 					checkNameUrl(os.Args[2], db)
 					runComponentWithDependencies(os.Args[2], db, getArriccioDir(), os.Args[3:], false, true, true, false)
 				} else {
-				log.Fatal("unsafe needs one parameter, aio unsafe <name | url>")
+					log.Fatal("unsafe needs one parameter, aio unsafe <name | url>")
 				}
 			}
 
@@ -443,7 +450,7 @@ func main() {
 			{
 				if len(os.Args) == 3 {
 					checkNameUrl(os.Args[2], db)
-					showComponentInfo(os.Args[2], db);
+					showComponentInfo(os.Args[2], db)
 				} else {
 					log.Fatal("info needs one parameter, aio info <name | url>")
 				}
@@ -454,7 +461,7 @@ func main() {
 			{
 				if len(os.Args) == 3 {
 					checkNameUrl(os.Args[2], db)
-					showLicenseInfo(os.Args[2], db);
+					showLicenseInfo(os.Args[2], db)
 				} else {
 					log.Fatal("license needs one parameter, aio license <name | url>")
 				}
@@ -489,7 +496,7 @@ func main() {
 
 		}
 
-	} 
+	}
 }
 
 //
@@ -516,11 +523,11 @@ func checkUrlIsCached(url string) (string, bool) {
 	fname := filepath.Join(cdir, hex.EncodeToString(hh[:]))
 	_, err := os.Stat(fname)
 	return fname, (err == nil)
-}	
+}
 
 func getImplFName(fname string) string {
 	base := filepath.Base(fname)
-	idir :=  filepath.Join(getArriccioDir(), "impl")
+	idir := filepath.Join(getArriccioDir(), "impl")
 	iname := filepath.Join(idir, base) + ".i"
 	return iname
 }
@@ -547,7 +554,7 @@ func getUrlAsCachedFile(urln string, update bool) (string, bool) {
 		} else {
 			log.Fatal("cannot open url: ", urln)
 		}
-	} 
+	}
 	abs, _ := filepath.Abs(fname)
 	return abs, isCached
 }
@@ -564,12 +571,13 @@ func getRemoteComponent(urln string, update bool) (string, Component, bool) {
 		}
 		// check key is https - important for security !!!
 		if len(aif.SigningKey) < 9 || aif.SigningKey[0:8] != "https://" {
-			log.Fatal("key file not provided or not to be downloaded over https: ", aif.SigningKey)
+			os.Remove(fname)
+			log.Fatal("key file (https!) not provided: ", aif.SigningKey, " for component: ", urln)
 		}
 		// verify signature
-		fsig, _ :=  getUrlAsCachedFile(urln + ".sig", update)
-		fkey, _ :=  getUrlAsCachedFile(aif.SigningKey, update)
-		if (!verifyFile(fname, fsig, fkey)) {
+		fsig, _ := getUrlAsCachedFile(urln+".sig", update)
+		fkey, _ := getUrlAsCachedFile(aif.SigningKey, update)
+		if !verifyFile(fname, fsig, fkey) {
 			os.Remove(fname)
 			os.Remove(fsig)
 			log.Fatal("downloaded component description not correctly signed: ", urln)
@@ -581,9 +589,9 @@ func getRemoteComponent(urln string, update bool) (string, Component, bool) {
 func getRemoteFile(urln string, urlkey string, update bool) string {
 	fname, isCached := getUrlAsCachedFile(urln, update)
 	if !isCached {
-		fsig, _ :=  getUrlAsCachedFile(urln + ".sig", update)
-		fkey, _ :=  getUrlAsCachedFile(urlkey, update)
-		if (!verifyFile(fname, fsig, fkey)) {
+		fsig, _ := getUrlAsCachedFile(urln+".sig", update)
+		fkey, _ := getUrlAsCachedFile(urlkey, update)
+		if !verifyFile(fname, fsig, fkey) {
 			os.Remove(fname)
 			os.Remove(fsig)
 			log.Fatal("downloaded component description not correctly signed: ", urln)
@@ -631,34 +639,33 @@ func writeAliasDB(db AliasDB) {
 	}
 }
 
-
 //
-// Run a command with dependency injection 
+// Run a command with dependency injection
 //
 
 // Data definitions for components, implementations and dependencies, this data is being configured in TOML files
 
 type Component struct {
-	Id          string `toml:"id-url"` // Url as id
-	Description string `toml:"description"` // description
-	SigningKey	string `toml:"signing-key"` // https location of public key for signature
-	License     string `toml:"license-short"` // License type
-	FullLicenseText string `toml:"license-full"`  // full text of license, included in component description
+	Id              string                    `toml:"id-url"`        // Url as id
+	Description     string                    `toml:"description"`   // description
+	SigningKey      string                    `toml:"signing-key"`   // https location of public key for signature
+	License         string                    `toml:"license-short"` // License type
+	FullLicenseText string                    `toml:"license-full"`  // full text of license, included in component description
 	Implementations []ComponentImplementation `toml:"implementation"`
 }
 
 type ComponentImplementation struct {
-	Architecture string `toml:"architecture"`
-	OS           string `toml:"operating-system"`
-	Location     string `toml:"archive-download-location"` // download Url tgz
-	Command      string `toml:"start-local-command"`
-	Environment  []string `toml:"environment-settings"`
+	Architecture string                     `toml:"architecture"`
+	OS           string                     `toml:"operating-system"`
+	Location     string                     `toml:"archive-download-location"` // download Url tgz
+	Command      string                     `toml:"start-local-command"`
+	Environment  []string                   `toml:"environment-settings"`
 	Dependencies []ImplementationDependency `toml:"dependency"`
 }
 
 type ImplementationDependency struct {
-	Id                string `toml:"id-url"`
-	Environment       []string `toml:"environment-settings"`
+	Id          string   `toml:"id-url"`
+	Environment []string `toml:"environment-settings"`
 }
 
 // routines to manage components
@@ -686,7 +693,7 @@ func writeComponent(db Component, fname string) {
 func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string, bool) {
 
 	fname := ""
-	ifloc := ""  // component location, directory if locally found
+	ifloc := "" // component location, directory if locally found
 
 	// check url
 	var dat []byte
@@ -708,7 +715,7 @@ func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string
 			}
 			dat, _ = ioutil.ReadFile(fname)
 			aif = readComponent(string(dat))
-		// file needs to be downloaded or taken from cache
+			// file needs to be downloaded or taken from cache
 		} else {
 			fname, aif, isDownload = getRemoteComponent(url, update)
 		}
@@ -723,17 +730,16 @@ func getComponentFromUrl(db AliasDB, url string, update bool) (Component, string
 	return aif, ifloc, isDownload
 }
 
-
 //
 // Processing Components, running commands with dependency injection
 //
 
 // We process dependency resolution in steps, each step adds some information to the results.
 type DependencyProcessingInfo struct {
-	comp Component
-	impl ComponentImplementation
+	comp       Component
+	impl       ComponentImplementation
 	installdir string
-	settings []string
+	settings   []string
 }
 
 func printDepProcInfo(ri DependencyProcessingInfo) {
@@ -748,20 +754,20 @@ func printDepProcInfo(ri DependencyProcessingInfo) {
 
 // install info
 type InstallInfo struct {
-	url string
-	key string
-	license string
+	url        string
+	key        string
+	license    string
 	installdir string
 }
 
-// resolveDependencies takes a url (the "command") and resolves all dependencies. This means 
+// resolveDependencies takes a url (the "command") and resolves all dependencies. This means
 // gathering all needed implementations and find suitable versions, as well as putting together
 // the needed environment setting, which are used to run the command.
-// The output is a bool stating if the resolution was successful (true) and a list of 
+// The output is a bool stating if the resolution was successful (true) and a list of
 // gathered processing information for the next step - running the command.
 func resolveDependencies(db AliasDB, cmd string, thisdep []ImplementationDependency, update bool) (bool, []DependencyProcessingInfo) {
 
-//	println("resolve Dependencies for: ", cmd)
+	//	println("resolve Dependencies for: ", cmd)
 
 	// get aif and process
 	// url is either given or taken from alias database
@@ -830,15 +836,15 @@ func resolveDependencies(db AliasDB, cmd string, thisdep []ImplementationDepende
 					aif,
 					impl,
 					location,
-					append(impl.Environment, thisdep[0].Environment...), 			// this is important, here happens dep. injections, we transfer dep env to settings
-				} 
+					append(impl.Environment, thisdep[0].Environment...), // this is important, here happens dep. injections, we transfer dep env to settings
+				}
 			} else {
 				newd = DependencyProcessingInfo{
 					aif,
 					impl,
 					location,
 					impl.Environment,
-				} 
+				}
 			}
 			rlist = append(rlist, newd)
 			for _, el := range rdeps {
@@ -861,7 +867,7 @@ func enrichDepProcInfoWithInstallDir(db AliasDB, depi []DependencyProcessingInfo
 
 		// check if needed, or if local dir already exists
 		locdir := el.installdir
-		if locdir != "" { 
+		if locdir != "" {
 			rlist = append(rlist, el)
 		} else if len(el.impl.Location) > 0 {
 
@@ -872,7 +878,7 @@ func enrichDepProcInfoWithInstallDir(db AliasDB, depi []DependencyProcessingInfo
 
 			// enrich output with directory name
 			el.installdir = getImplFName(fname)
-			rlist = append(rlist, el) 
+			rlist = append(rlist, el)
 		}
 	}
 
@@ -881,13 +887,15 @@ func enrichDepProcInfoWithInstallDir(db AliasDB, depi []DependencyProcessingInfo
 
 func installDownloads(infos []InstallInfo, unsafe bool) {
 	// ask user if downloads can be accepted
-	if len(infos) == 0 {return}
+	if len(infos) == 0 {
+		return
+	}
 	inline := "unsafe"
 
 	if !unsafe {
 		println("\narriccio is going to download and install the following files:\n" +
-				"--------------------------------------------------------------\n" +
-				"(more license info can be obtained by using the \"aio license\" cmd)\n")
+			"--------------------------------------------------------------\n" +
+			"(more license info can be obtained by using the \"aio license\" cmd)\n")
 
 		for _, ii := range infos {
 			println("file: ", ii.url, "\n signing key: ", ii.key, "\n license: ", ii.license, "\n")
@@ -916,7 +924,7 @@ func installDownloads(infos []InstallInfo, unsafe bool) {
 			println(" - done")
 
 			// extract, if signature is correct
-			dname := getImplFName( fname)
+			dname := getImplFName(fname)
 			// check if already in cache, extracted
 			_, err := os.Stat(dname)
 			if err != nil {
@@ -968,7 +976,9 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 
 			// check for separator
 			s := string(os.PathListSeparator)
-			if len(fs) == 4 { s = fs[3] }
+			if len(fs) == 4 {
+				s = fs[3]
+			}
 
 			// compose result
 			if ok {
@@ -978,7 +988,7 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 			}
 
 		} else {
-			log.Fatal("wrong number of arguments in setting: ", s)			
+			log.Fatal("wrong number of arguments in setting: ", s)
 		}
 	}
 
@@ -986,9 +996,9 @@ func evaluateEnvSetting(env []string, settings []string, installdir string) []st
 	out := []string{}
 	for k, v := range m {
 		if val, ok := orig_key[k]; ok {
-			out = append(out, val + "=" + v)
+			out = append(out, val+"="+v)
 		} else {
-			out = append(out, k + "=" + v)
+			out = append(out, k+"="+v)
 		}
 	}
 	return out
@@ -1003,7 +1013,7 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	binary := ""
 	arglist := args
 
-	for i := len(depi)-1; i >= 0; i-- {  // reversed loop, to start with lowest dependency
+	for i := len(depi) - 1; i >= 0; i-- { // reversed loop, to start with lowest dependency
 		el := depi[i]
 
 		env = evaluateEnvSetting(env, el.settings, el.installdir)
@@ -1011,9 +1021,9 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 		// command handling, binary will include all commands separated by space to allow command chaining
 		if len(el.impl.Command) != 0 {
 			bparts := strings.Fields(el.impl.Command)
-			newcmd := el.installdir + string(os.PathSeparator) + bparts[0]  // append installdir to command
+			newcmd := el.installdir + string(os.PathSeparator) + bparts[0] // append installdir to command
 
-			if len(binary) != 0 {	// if there is already a command, push this one to arglist
+			if len(binary) != 0 { // if there is already a command, push this one to arglist
 				a := make([]string, 1)
 				a[0] = newcmd
 				arglist = append(a, arglist...)
@@ -1022,11 +1032,11 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 				arglist = append(bparts[1:], arglist...)
 			}
 		}
-	}	
+	}
 
 	// if binary still empty, take first argument as binary
 	if binary == "" && len(arglist) > 0 {
-		binary = arglist[0] 
+		binary = arglist[0]
 		arglist = arglist[1:]
 	}
 
@@ -1035,9 +1045,9 @@ func composeEnvironmentAndRunCommand(depi []DependencyProcessingInfo, args []str
 	cmd.Env = env
 
 	if console {
-	    cmd.Stdout = os.Stdout
-	    cmd.Stderr = os.Stderr
-	    cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
 		cmd.Run()
 	} else {
 		cmd.Start()
@@ -1054,7 +1064,7 @@ func showComponentInfo(cmd string, db AliasDB) {
 
 	aif, _, _ := getComponentFromUrl(db, url, false)
 
-//	fmt.Printf("%+v", aif)
+	//	fmt.Printf("%+v", aif)
 
 	println("Component Info on:", aif.Id, "\n")
 	println("Description:")
